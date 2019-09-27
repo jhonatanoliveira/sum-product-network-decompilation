@@ -21,13 +21,18 @@ class BayesianNetwork:
         if ord_type == "rev":
             return list(reversed(list(nx.topological_sort(self.dag))))
         elif ord_type == "mn":
-            return greedy_ordering(self.moral_graph(), heuristic_min_neighbour)
+            return greedy_ordering(self.moral_graph(), heuristic_min_neighbour,
+                                   self.var_cardinalities)
+        elif ord_type == "mw":
+            return greedy_ordering(self.moral_graph(), heuristic_min_weight,
+                                   self.var_cardinalities)
         else:
             raise NotImplementedError
 
     def moral_graph(self):
         """
-        Source: https://networkx.github.io/documentation/stable/_modules/networkx/algorithms/moral.html#moral_graph
+        Source: https://networkx.github.io/documentation/stable/
+        _modules/networkx/algorithms/moral.html#moral_graph
         """
         H = self.dag.to_undirected()
         for preds in self.dag.pred.values():
@@ -246,15 +251,15 @@ def draw_graph(graph, color_map=None):
     plt.show()
 
 
-def greedy_ordering(moral_graph, heuristic):
+def greedy_ordering(moral_graph, heuristic, cardinalities):
     mgraph = moral_graph.copy()
     to_visit = [n for n in mgraph.nodes()]
     ordering = []
     while len(to_visit) > 0:
         min_n = to_visit[0]
-        min_score = heuristic(min_n, mgraph)
+        min_score = heuristic(min_n, mgraph, cardinalities)
         for n in to_visit[1:]:
-            curr_score = heuristic(n, mgraph)
+            curr_score = heuristic(n, mgraph, cardinalities)
             if curr_score < min_score:
                 min_n = n
                 min_score = curr_score
@@ -264,10 +269,19 @@ def greedy_ordering(moral_graph, heuristic):
             )
         mgraph.remove_node(min_n)
         to_visit.remove(min_n)
+    return ordering
 
 
-def heuristic_min_neighbour(moral_graph, node):
+def heuristic_min_neighbour(node, moral_graph, cardinalities):
     return len(list(moral_graph.neighbors(node)))
+
+
+def heuristic_min_weight(node, moral_graph, cardinalities):
+    neighbours = list(moral_graph.neighbors(node))
+    return reduce(
+            (lambda x, y: x * y),
+            [cardinalities[n] for n in neighbours])\
+        if len(neighbours) > 0 else 1
 
 
 if __name__ == "__main__":
