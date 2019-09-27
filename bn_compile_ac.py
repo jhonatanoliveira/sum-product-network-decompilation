@@ -31,7 +31,7 @@ class BayesianNetwork:
                 self.moral_graph(), heuristic_min_weight,
                 self.var_cardinalities)
         elif "," in ord_type:
-            ordering = ord_type.split(",")
+            ordering = [v.strip() for v in ord_type.split(",")]
             print_ordering = False
         else:
             raise NotImplementedError
@@ -373,7 +373,7 @@ def remove_indicators_ac(ac):
     return ArithmeticCircuit(mod_dag)
 
 
-def draw_subplot_graphs(graphs, subtitles=None):
+def draw_subplot_graphs(graphs, subtitles=None, main_title=None):
     total_graphs = len(graphs)
     subplot_amt = math.ceil(math.sqrt(total_graphs))
     subplot_rows = (subplot_amt - 1)\
@@ -386,6 +386,8 @@ def draw_subplot_graphs(graphs, subtitles=None):
         if subtitles:
             plt.title(subtitles[i])
         plt.grid(True)
+    if main_title:
+        plt.suptitle(main_title)
     plt.show()
 
 
@@ -448,4 +450,5 @@ if __name__ == "__main__":
     graphs.append(ac)
     graphs_subtitles.append("Remove Barren Products")
 
-    draw_subplot_graphs(graphs, graphs_subtitles)
+    main_title = "Elimination Ordering: " + ",".join(elim_ord)
+    draw_subplot_graphs(graphs, graphs_subtitles, main_title)
