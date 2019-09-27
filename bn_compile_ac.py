@@ -18,17 +18,27 @@ class BayesianNetwork:
         self.var_cardinalities = var_cardinalities
         self.factors = factors
 
-    def get_elimination_ordering(self, ord_type):
+    def get_elimination_ordering(self, ord_type, print_ordering=True):
+        ordering = None
         if ord_type == "rev":
-            return list(reversed(list(nx.topological_sort(self.dag))))
+            ordering = list(reversed(list(nx.topological_sort(self.dag))))
         elif ord_type == "mn":
-            return greedy_ordering(self.moral_graph(), heuristic_min_neighbour,
-                                   self.var_cardinalities)
+            ordering = greedy_ordering(
+                self.moral_graph(), heuristic_min_neighbour,
+                self.var_cardinalities)
         elif ord_type == "mw":
-            return greedy_ordering(self.moral_graph(), heuristic_min_weight,
-                                   self.var_cardinalities)
+            ordering = greedy_ordering(
+                self.moral_graph(), heuristic_min_weight,
+                self.var_cardinalities)
+        elif "," in ord_type:
+            ordering = ord_type.split(",")
+            print_ordering = False
         else:
             raise NotImplementedError
+        if print_ordering:
+            print("Elimination Ordering: " + str(ordering))
+
+        return ordering
 
     def moral_graph(self):
         """
@@ -40,6 +50,15 @@ class BayesianNetwork:
             predecessors_combinations = itertools.combinations(preds, r=2)
             H.add_edges_from(predecessors_combinations)
         return H
+
+    def draw(self, show=True):
+        NODE_COLOR = "#DA667B"
+        color_map = []
+        labels = {}
+        for node in self.dag.nodes():
+            color_map.append(NODE_COLOR)
+            labels[node] = node
+        draw_graph(self.dag, show, color_map, labels)
 
 
 class Factor:
@@ -297,7 +316,7 @@ def heuristic_min_weight(node, moral_graph, cardinalities):
 
 def remove_parameters_ac(ac):
     mod_dag = ac.dag.copy()
-    for node in [n for n in ac.dag.nodes()]:
+    for node in [n for n in mod_dag.nodes()]:
         if "P" in node:
             mod_dag.remove_node(node)
     return ArithmeticCircuit(mod_dag)
@@ -305,19 +324,24 @@ def remove_parameters_ac(ac):
 
 def remove_barren_prod_ac(ac):
     mod_dag = ac.dag.copy()
-    for node in [n for n in ac.dag.nodes()]:
-        children = list(mod_dag.successors(node))
-        if "*" in node and len(children) == 1:
-            parents = list(mod_dag.predecessors(node))
-            mod_dag.add_edges_from(list(itertools.product(parents, children)))
-            mod_dag.remove_node(node)
+    found = True
+    while found:
+        found = False
+        for node in [n for n in mod_dag.nodes()]:
+            children = list(mod_dag.successors(node))
+            if "*" in node and len(children) == 1:
+                parents = list(mod_dag.predecessors(node))
+                mod_dag.add_edges_from(
+                    list(itertools.product(parents, children)))
+                mod_dag.remove_node(node)
+                found = True
     return ArithmeticCircuit(mod_dag)
 
 
 def add_terminal_node_ac(ac):
     mod_dag = ac.dag.copy()
     terminal_counter = 0
-    for node in [n for n in ac.dag.nodes()]:
+    for node in [n for n in mod_dag.nodes()]:
         children = list(mod_dag.successors(node))
         if "+" in node and len(children) > 0\
                 and all(["I" in c for c in children]):
@@ -343,26 +367,46 @@ def add_terminal_node_ac(ac):
 
 def remove_indicators_ac(ac):
     mod_dag = ac.dag.copy()
-    for node in [n for n in ac.dag.nodes()]:
+    for node in [n for n in mod_dag.nodes()]:
         if "I" in node:
             mod_dag.remove_node(node)
     return ArithmeticCircuit(mod_dag)
 
 
-def draw_subplot_acs(acs, subtitles=None):
-    total_acs = len(acs)
-    subplot_amt = math.ceil(math.sqrt(total_acs))
-    subplot_rows = subplot_amt\
-        if (total_acs - subplot_amt) % subplot_amt != 0 else subplot_amt - 1
+def draw_subplot_graphs(graphs, subtitles=None):
+    total_graphs = len(graphs)
+    subplot_amt = math.ceil(math.sqrt(total_graphs))
+    subplot_rows = (subplot_amt - 1)\
+        if (total_graphs - subplot_amt) < subplot_amt else subplot_amt
     subplot_cfg = str(subplot_rows) + str(subplot_amt)
     plt.figure()
-    for i, ac in enumerate(acs):
+    for i, graph in enumerate(graphs):
         plt.subplot(subplot_cfg + str(i + 1))
-        ac.draw(show=False)
+        graph.draw(show=False)
         if subtitles:
             plt.title(subtitles[i])
         plt.grid(True)
     plt.show()
+
+
+def remove_redundant_prod_ac(ac):
+    mod_dag = ac.dag.copy()
+    found = True
+    while found:
+        found = False
+        for node in [n for n in mod_dag.nodes()]:
+            if "*" in node:
+                parents = list(mod_dag.predecessors(node))
+                for parent in parents:
+                    if "*" in parent:
+                        children = list(mod_dag.successors(node))
+                        mod_dag.add_edges_from(
+                            list(itertools.product([parent], children)))
+                        mod_dag.remove_edge(parent, node)
+                        found = True
+                if len(list(mod_dag.predecessors(node))) == 0:
+                    mod_dag.remove_node(node)
+    return ArithmeticCircuit(mod_dag)
 
 
 if __name__ == "__main__":
@@ -373,26 +417,35 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     bn = get_bn_from_file(args.bn)
+
     elim_ord = bn.get_elimination_ordering(args.elim_ord)
-    print(">>> Elimination Ordering: " + str(elim_ord))
-    acs = []
-    acs_subtitles = []
+
+    graphs = []
+    graphs_subtitles = []
+
+    graphs.append(bn)
+    graphs_subtitles.append("BN")
+
     ac = compile_variable_elimination(bn, elim_ord)
-    acs.append(ac)
-    acs_subtitles.append("AC")
+    graphs.append(ac)
+    graphs_subtitles.append("AC")
     ac = remove_parameters_ac(ac)
-    acs.append(ac)
-    acs_subtitles.append("Remove Parameters")
+    graphs.append(ac)
+    graphs_subtitles.append("Remove Parameters")
     ac = remove_barren_prod_ac(ac)
-    acs.append(ac)
-    acs_subtitles.append("Remove Barren Products")
+    graphs.append(ac)
+    graphs_subtitles.append("Remove Barren Products")
     ac = add_terminal_node_ac(ac)
-    acs.append(ac)
-    acs_subtitles.append("Add Terminal Nodes")
+    graphs.append(ac)
+    graphs_subtitles.append("Add Terminal Nodes")
     ac = remove_indicators_ac(ac)
-    acs.append(ac)
-    acs_subtitles.append("Remove Indicators")
+    graphs.append(ac)
+    graphs_subtitles.append("Remove Indicators")
+    ac = remove_redundant_prod_ac(ac)
+    graphs.append(ac)
+    graphs_subtitles.append("Remove Redundant Products")
     ac = remove_barren_prod_ac(ac)
-    acs.append(ac)
-    acs_subtitles.append("Remove Barren Products")
-    draw_subplot_acs(acs, acs_subtitles)
+    graphs.append(ac)
+    graphs_subtitles.append("Remove Barren Products")
+
+    draw_subplot_graphs(graphs, graphs_subtitles)
