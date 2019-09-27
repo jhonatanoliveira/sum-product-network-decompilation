@@ -69,21 +69,24 @@ class ArithmeticCircuit:
         self.dag = dag
 
     def draw(self):
-        SUM_COLOR = 5
-        PROD_COLOR = 10
-        IND_COLOR = 20
-        PROB_COLOR = 25
+        SUM_COLOR, PROD_COLOR, IND_COLOR, PROB_COLOR = 1, 5, 20, 25
+        SUM_LABEL, PROD_LABEL = "+", "x"
         color_map = []
+        labels = {}
         for node in self.dag.nodes():
             if "+" in node:
                 color_map.append(SUM_COLOR)
+                labels[node] = SUM_LABEL
             elif "*" in node:
                 color_map.append(PROD_COLOR)
+                labels[node] = PROD_LABEL
             elif "I" in node:
                 color_map.append(IND_COLOR)
+                labels[node] = node.replace("I(", "").replace(")", "")
             elif "P" in node:
                 color_map.append(PROB_COLOR)
-        draw_graph(self.dag, color_map)
+                labels[node] = ""
+        draw_graph(self.dag, color_map, labels)
 
 
 def get_bn_from_file(bn_file_name):
@@ -244,10 +247,11 @@ def compile_variable_elimination(bn, elim_ord):
     return ArithmeticCircuit(ac_dag)
 
 
-def draw_graph(graph, color_map=None):
+def draw_graph(graph, color_map=None, labels=None):
     pos = graphviz_layout(graph, prog='dot')
     nx.draw(graph, pos, with_labels=True, arrows=True,
-            node_color=color_map, node_size=1000, cmap=plt.cm.coolwarm)
+            node_color=color_map, node_size=400, cmap=plt.cm.coolwarm,
+            font_size=8, labels=labels)
     plt.show()
 
 
