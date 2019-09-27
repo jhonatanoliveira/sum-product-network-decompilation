@@ -212,8 +212,10 @@ def draw_graph(graph):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Compile a BN into an AC")
     parser.add_argument("--bn", type=str, help="Path to '.bn' file.")
+    parser.add_argument("--elim-ord", type=str, help="Elimination ordering to be used.", default="rev")
+    args = parser.parse_args()
 
-    bn = get_bn_from_file("hmm.bn")
+    bn = get_bn_from_file(args.bn)
 
     compile_variable_elimination(bn, ["X3", "H3", "X2", "H2", "X1", "H1"])
     # draw_bn(bn.dag)
