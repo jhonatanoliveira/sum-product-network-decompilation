@@ -2,6 +2,7 @@ import networkx as nx
 from networkx.drawing.nx_agraph import graphviz_layout
 from functools import reduce
 import argparse
+import itertools
 import matplotlib
 matplotlib.use('TkAgg')
 import matplotlib.pyplot as plt
@@ -15,6 +16,24 @@ class BayesianNetwork:
         # Dict {'A': 2, 'B': 3}
         self.var_cardinalities = var_cardinalities
         self.factors = factors
+
+    def get_elimination_ordering(self, ord_type):
+        if ord_type == "rev":
+            return list(reversed(list(nx.topological_sort(self.dag))))
+        elif ord_type == "mn":
+            return greedy_ordering(self.moral_graph(), heuristic_min_neighbour)
+        else:
+            raise NotImplementedError
+
+    def moral_graph(self):
+        """
+        Source: https://networkx.github.io/documentation/stable/_modules/networkx/algorithms/moral.html#moral_graph
+        """
+        H = self.dag.to_undirected()
+        for preds in self.dag.pred.values():
+            predecessors_combinations = itertools.combinations(preds, r=2)
+            H.add_edges_from(predecessors_combinations)
+        return H
 
 
 class Factor:
@@ -43,6 +62,23 @@ class ArithmeticCircuit:
 
     def __init__(self, dag):
         self.dag = dag
+
+    def draw(self):
+        SUM_COLOR = 5
+        PROD_COLOR = 10
+        IND_COLOR = 20
+        PROB_COLOR = 25
+        color_map = []
+        for node in self.dag.nodes():
+            if "+" in node:
+                color_map.append(SUM_COLOR)
+            elif "*" in node:
+                color_map.append(PROD_COLOR)
+            elif "I" in node:
+                color_map.append(IND_COLOR)
+            elif "P" in node:
+                color_map.append(PROB_COLOR)
+        draw_graph(self.dag, color_map)
 
 
 def get_bn_from_file(bn_file_name):
@@ -160,8 +196,8 @@ def ac_leaves(ac_dag, bn, node_counters):
                           for k in range(1, factor.total_variables)]) + ")"\
                 if factor.total_variables > 1\
                 else "P(" + factor.variables[0] + str(assignment[0]) + ")"
-            ac_dag.add_node(indc_var)
-            ac_dag.add_node(param_var)
+            ac_dag.add_node(indc_var, node_color='b')
+            ac_dag.add_node(param_var, node_color='g')
             n_prod = "*" + str(node_counters[1])
             node_counters[1] += 1  # increment product counter
             factor.values[i] = n_prod
@@ -203,19 +239,45 @@ def compile_variable_elimination(bn, elim_ord):
     return ArithmeticCircuit(ac_dag)
 
 
-def draw_graph(graph):
+def draw_graph(graph, color_map=None):
     pos = graphviz_layout(graph, prog='dot')
-    nx.draw(graph, pos, with_labels=True, arrows=True)
+    nx.draw(graph, pos, with_labels=True, arrows=True,
+            node_color=color_map, node_size=1000, cmap=plt.cm.coolwarm)
     plt.show()
+
+
+def greedy_ordering(moral_graph, heuristic):
+    mgraph = moral_graph.copy()
+    to_visit = [n for n in mgraph.nodes()]
+    ordering = []
+    while len(to_visit) > 0:
+        min_n = to_visit[0]
+        min_score = heuristic(min_n, mgraph)
+        for n in to_visit[1:]:
+            curr_score = heuristic(n, mgraph)
+            if curr_score < min_score:
+                min_n = n
+                min_score = curr_score
+        ordering.append(min_n)
+        mgraph.add_edges_from(
+            list(itertools.combinations(list(mgraph.neighbors(min_n)), 2))
+            )
+        mgraph.remove_node(min_n)
+        to_visit.remove(min_n)
+
+
+def heuristic_min_neighbour(moral_graph, node):
+    return len(list(moral_graph.neighbors(node)))
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Compile a BN into an AC")
     parser.add_argument("--bn", type=str, help="Path to '.bn' file.")
-    parser.add_argument("--elim-ord", type=str, help="Elimination ordering to be used.", default="rev")
+    parser.add_argument("--elim-ord", type=str,
+                        help="Elimination ordering to be used.", default="rev")
     args = parser.parse_args()
 
     bn = get_bn_from_file(args.bn)
-
-    compile_variable_elimination(bn, ["X3", "H3", "X2", "H2", "X1", "H1"])
-    # draw_bn(bn.dag)
+    elim_ord = bn.get_elimination_ordering(args.elim_ord)
+    ac = compile_variable_elimination(bn, elim_ord)
+    ac.draw()
