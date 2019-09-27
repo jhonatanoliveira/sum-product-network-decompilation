@@ -1,6 +1,7 @@
 import networkx as nx
 from networkx.drawing.nx_agraph import graphviz_layout
 from functools import reduce
+import argparse
 import matplotlib
 matplotlib.use('TkAgg')
 import matplotlib.pyplot as plt
@@ -36,6 +37,12 @@ class Factor:
 
     def stride(self, variable):
         return self._strides[variable] if variable in self._strides else 0
+
+
+class ArithmeticCircuit:
+
+    def __init__(self, dag):
+        self.dag = dag
 
 
 def get_bn_from_file(bn_file_name):
@@ -192,7 +199,8 @@ def compile_variable_elimination(bn, elim_ord):
         sum_factor = ac_factor_sum(
             ac_dag, prod_factor, variable, node_counters)
         curr_bn_factors.append(sum_factor)
-    draw_graph(ac_dag)
+
+    return ArithmeticCircuit(ac_dag)
 
 
 def draw_graph(graph):
@@ -202,6 +210,10 @@ def draw_graph(graph):
 
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Compile a BN into an AC")
+    parser.add_argument("--bn", type=str, help="Path to '.bn' file.")
+
     bn = get_bn_from_file("hmm.bn")
-    # draw_bn(bn.dag)
+
     compile_variable_elimination(bn, ["X3", "H3", "X2", "H2", "X1", "H1"])
+    # draw_bn(bn.dag)
