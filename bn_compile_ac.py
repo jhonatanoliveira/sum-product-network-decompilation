@@ -3,6 +3,7 @@ from networkx.drawing.nx_agraph import graphviz_layout
 from functools import reduce
 import argparse
 import itertools
+import math
 import matplotlib
 matplotlib.use('TkAgg')
 import matplotlib.pyplot as plt
@@ -68,8 +69,9 @@ class ArithmeticCircuit:
     def __init__(self, dag):
         self.dag = dag
 
-    def draw(self):
-        SUM_COLOR, PROD_COLOR, IND_COLOR, PROB_COLOR = 1, 5, 20, 25
+    def draw(self, show=True):
+        SUM_COLOR, PROD_COLOR, IND_COLOR, PROB_COLOR, TERM_COLOR =\
+            "#ECE4B7", "#D9DD92", "#EABE7C", "#DD6031", "#6B717E"
         SUM_LABEL, PROD_LABEL = "+", "x"
         color_map = []
         labels = {}
@@ -86,7 +88,11 @@ class ArithmeticCircuit:
             elif "P" in node:
                 color_map.append(PROB_COLOR)
                 labels[node] = ""
-        draw_graph(self.dag, color_map, labels)
+            elif "T" in node:
+                color_map.append(TERM_COLOR)
+                tmp = node.replace("T(", "").replace(")", "")
+                labels[node] = tmp[:tmp.index("-")]
+        draw_graph(self.dag, show, color_map, labels)
 
 
 def get_bn_from_file(bn_file_name):
@@ -197,7 +203,7 @@ def ac_leaves(ac_dag, bn, node_counters):
         assignment = [0 for _ in range(0, factor.total_variables)]
         for i in range(factor.total_values):  # per row
             indc_var = "I(" +\
-                factor.variables[0] + str(assignment[0]) + ")"
+                factor.variables[0] + "-" + str(assignment[0]) + ")"
             param_var = "P(" +\
                 factor.variables[0] + str(assignment[0]) + "|" +\
                 ",".join([factor.variables[k] + str(assignment[k])
@@ -247,12 +253,13 @@ def compile_variable_elimination(bn, elim_ord):
     return ArithmeticCircuit(ac_dag)
 
 
-def draw_graph(graph, color_map=None, labels=None):
+def draw_graph(graph, show, color_map=None, labels=None):
     pos = graphviz_layout(graph, prog='dot')
     nx.draw(graph, pos, with_labels=True, arrows=True,
-            node_color=color_map, node_size=400, cmap=plt.cm.coolwarm,
+            node_color=color_map, node_size=400,
             font_size=8, labels=labels)
-    plt.show()
+    if show:
+        plt.show()
 
 
 def greedy_ordering(moral_graph, heuristic, cardinalities):
@@ -288,6 +295,76 @@ def heuristic_min_weight(node, moral_graph, cardinalities):
         if len(neighbours) > 0 else 1
 
 
+def remove_parameters_ac(ac):
+    mod_dag = ac.dag.copy()
+    for node in [n for n in ac.dag.nodes()]:
+        if "P" in node:
+            mod_dag.remove_node(node)
+    return ArithmeticCircuit(mod_dag)
+
+
+def remove_barren_prod_ac(ac):
+    mod_dag = ac.dag.copy()
+    for node in [n for n in ac.dag.nodes()]:
+        children = list(mod_dag.successors(node))
+        if "*" in node and len(children) == 1:
+            parents = list(mod_dag.predecessors(node))
+            mod_dag.add_edges_from(list(itertools.product(parents, children)))
+            mod_dag.remove_node(node)
+    return ArithmeticCircuit(mod_dag)
+
+
+def add_terminal_node_ac(ac):
+    mod_dag = ac.dag.copy()
+    terminal_counter = 0
+    for node in [n for n in ac.dag.nodes()]:
+        children = list(mod_dag.successors(node))
+        if "+" in node and len(children) > 0\
+                and all(["I" in c for c in children]):
+            a_child = children[0]
+            term_node = a_child.replace("I(", "").replace(")", "")
+            term_node = term_node[:term_node.index("-")]
+            term_node += "-" + str(terminal_counter)
+            term_node = "T(" + term_node + ")"
+            terminal_counter += 1
+            mod_dag.add_node(term_node)
+            parents = list(mod_dag.predecessors(node))
+            mod_dag.add_edges_from(
+                list(itertools.product(parents, [term_node])))
+            mod_dag.remove_node(node)
+    for node in [n for n in mod_dag.nodes()]:
+        children = list(mod_dag.successors(node))
+        parents = list(mod_dag.predecessors(node))
+        if len(children) == 0 and len(parents) == 0:
+            mod_dag.remove_node(node)
+
+    return ArithmeticCircuit(mod_dag)
+
+
+def remove_indicators_ac(ac):
+    mod_dag = ac.dag.copy()
+    for node in [n for n in ac.dag.nodes()]:
+        if "I" in node:
+            mod_dag.remove_node(node)
+    return ArithmeticCircuit(mod_dag)
+
+
+def draw_subplot_acs(acs, subtitles=None):
+    total_acs = len(acs)
+    subplot_amt = math.ceil(math.sqrt(total_acs))
+    subplot_rows = subplot_amt\
+        if (total_acs - subplot_amt) % subplot_amt != 0 else subplot_amt - 1
+    subplot_cfg = str(subplot_rows) + str(subplot_amt)
+    plt.figure()
+    for i, ac in enumerate(acs):
+        plt.subplot(subplot_cfg + str(i + 1))
+        ac.draw(show=False)
+        if subtitles:
+            plt.title(subtitles[i])
+        plt.grid(True)
+    plt.show()
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Compile a BN into an AC")
     parser.add_argument("--bn", type=str, help="Path to '.bn' file.")
@@ -297,5 +374,25 @@ if __name__ == "__main__":
 
     bn = get_bn_from_file(args.bn)
     elim_ord = bn.get_elimination_ordering(args.elim_ord)
+    print(">>> Elimination Ordering: " + str(elim_ord))
+    acs = []
+    acs_subtitles = []
     ac = compile_variable_elimination(bn, elim_ord)
-    ac.draw()
+    acs.append(ac)
+    acs_subtitles.append("AC")
+    ac = remove_parameters_ac(ac)
+    acs.append(ac)
+    acs_subtitles.append("Remove Parameters")
+    ac = remove_barren_prod_ac(ac)
+    acs.append(ac)
+    acs_subtitles.append("Remove Barren Products")
+    ac = add_terminal_node_ac(ac)
+    acs.append(ac)
+    acs_subtitles.append("Add Terminal Nodes")
+    ac = remove_indicators_ac(ac)
+    acs.append(ac)
+    acs_subtitles.append("Remove Indicators")
+    ac = remove_barren_prod_ac(ac)
+    acs.append(ac)
+    acs_subtitles.append("Remove Barren Products")
+    draw_subplot_acs(acs, acs_subtitles)
