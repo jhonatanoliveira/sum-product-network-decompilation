@@ -22,7 +22,7 @@ class BayesianNetwork:
         ordering = None
         if ord_type == "rev":
             ordering = list(reversed(list(nx.topological_sort(self.dag))))
-        if ord_type == "top":
+        elif ord_type == "top":
             ordering = list(nx.topological_sort(self.dag))
         elif ord_type == "mn":
             ordering = greedy_ordering(
@@ -375,7 +375,7 @@ def remove_indicators_ac(ac):
             for parent in mod_dag.predecessors(node):
                 for sibling in mod_dag.successors(parent):
                     if sibling != node and not (
-                            "+" in sibling or "*" in sibling):
+                            "+" in sibling or "*" in sibling or "T" in sibling):
                         all_sum_prod = False
             if all_sum_prod:
                 mod_dag.remove_node(node)
@@ -386,7 +386,7 @@ def draw_subplot_graphs(graphs, subtitles=None, main_title=None):
     total_graphs = len(graphs)
     subplot_amt = math.ceil(math.sqrt(total_graphs))
     subplot_rows = (subplot_amt - 1)\
-        if (total_graphs - subplot_amt) < subplot_amt else subplot_amt
+        if (total_graphs - subplot_amt) <= subplot_amt else subplot_amt
     subplot_cfg = str(subplot_rows) + str(subplot_amt)
     plt.figure()
     for i, graph in enumerate(graphs):
@@ -400,7 +400,7 @@ def draw_subplot_graphs(graphs, subtitles=None, main_title=None):
     plt.show()
 
 
-def remove_redundant_prod_ac(ac):
+def remove_doubled_prod_ac(ac):
     mod_dag = ac.dag.copy()
     found = True
     while found:
@@ -417,6 +417,24 @@ def remove_redundant_prod_ac(ac):
                         found = True
                 if len(list(mod_dag.predecessors(node))) == 0:
                     mod_dag.remove_node(node)
+    return ArithmeticCircuit(mod_dag)
+
+
+def remove_duplicated_prod_ac(ac):
+    mod_dag = ac.dag.copy()
+    seen_prods, seen_children = [], []  # Key, Value
+    for node in [n for n in mod_dag.nodes()]:
+        if "*" in node:
+            ch = set(list(mod_dag.successors(node)))
+            if ch in seen_children:
+                parents = list(mod_dag.predecessors(node))
+                prod_to_connec = seen_prods[seen_children.index(ch)]
+                mod_dag.add_edges_from(
+                    itertools.product(parents, [prod_to_connec]))
+                mod_dag.remove_node(node)
+            else:
+                seen_children.append(ch)
+                seen_prods.append(node)
     return ArithmeticCircuit(mod_dag)
 
 
@@ -438,26 +456,36 @@ if __name__ == "__main__":
     graphs_subtitles.append("BN")
 
     ac = compile_variable_elimination(bn, elim_ord)
-    graphs.append(ac)
-    graphs_subtitles.append("AC")
+    # graphs.append(ac)
+    # graphs_subtitles.append("AC")
+
     ac = remove_parameters_ac(ac)
-    graphs.append(ac)
-    graphs_subtitles.append("Remove Parameters")
+    # graphs.append(ac)
+    # graphs_subtitles.append("Remove Parameters")
+
     ac = remove_barren_prod_ac(ac)
     graphs.append(ac)
     graphs_subtitles.append("Remove Barren Products")
+
     ac = add_terminal_node_ac(ac)
     graphs.append(ac)
     graphs_subtitles.append("Add Terminal Nodes")
+
     ac = remove_indicators_ac(ac)
     graphs.append(ac)
     graphs_subtitles.append("Remove Indicators")
+
     ac = remove_barren_prod_ac(ac)
     graphs.append(ac)
     graphs_subtitles.append("Remove Barren Products")
-    ac = remove_redundant_prod_ac(ac)
+
+    ac = remove_doubled_prod_ac(ac)
     graphs.append(ac)
-    graphs_subtitles.append("Remove Redundant Products")
+    graphs_subtitles.append("Remove Doubled Products")
+
+    ac = remove_duplicated_prod_ac(ac)
+    graphs.append(ac)
+    graphs_subtitles.append("Remove Duplicated Products")
 
     main_title = "Elimination Ordering: " + ",".join(elim_ord)
     draw_subplot_graphs(graphs, graphs_subtitles, main_title)
