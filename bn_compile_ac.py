@@ -387,11 +387,11 @@ def draw_subplot_graphs(graphs, subtitles=None, main_title=None):
     total_graphs = len(graphs)
     subplot_amt = math.ceil(math.sqrt(total_graphs))
     subplot_rows = (subplot_amt - 1)\
-        if (total_graphs - subplot_amt) <= subplot_amt else subplot_amt
-    subplot_cfg = str(subplot_rows) + str(subplot_amt)
+        if (subplot_amt * subplot_amt - total_graphs) >= subplot_amt\
+        else subplot_amt
     plt.figure()
     for i, graph in enumerate(graphs):
-        plt.subplot(subplot_cfg + str(i + 1))
+        plt.subplot(subplot_rows, subplot_amt, i + 1)
         graph.draw(show=False)
         if subtitles:
             plt.title(subtitles[i])
@@ -421,7 +421,7 @@ def remove_doubled_prod_ac(ac):
     return ArithmeticCircuit(mod_dag)
 
 
-def get_bn(ac):
+def get_bn(ac, contract_scope=True):
     # algorithm for detecting conditioning
     def _is_conditioning(anc, sum_node, dag):
         not_in_desc = False
@@ -453,14 +453,17 @@ def get_bn(ac):
         if "T" in node:
             latent_vars[node] = list(scopes[node])[0]
         elif "+" in node:
-            if scopes[node] in lv_scopes:
-                idx_lv = lv_scopes.index(scopes[node])
-                latent_vars[node] = lv_assigned[idx_lv]
+            if contract_scope:
+                if scopes[node] in lv_scopes:
+                    idx_lv = lv_scopes.index(scopes[node])
+                    latent_vars[node] = lv_assigned[idx_lv]
+                else:
+                    new_lv_assignment = "Zs-" + str(sum_lv_idx)
+                    lv_scopes.append(scopes[node])
+                    lv_assigned.append(new_lv_assignment)
+                    latent_vars[node] = new_lv_assignment
             else:
-                new_lv_assignment = "Zs-" + str(sum_lv_idx)
-                lv_scopes.append(scopes[node])
-                lv_assigned.append(new_lv_assignment)
-                latent_vars[node] = new_lv_assignment
+                latent_vars[node] = "Zs-" + str(sum_lv_idx)
             sum_lv_idx += 1
     # construct bn DAG
     bn_dag = nx.DiGraph()
@@ -493,17 +496,7 @@ def remove_duplicated_prod_ac(ac):
     return ArithmeticCircuit(mod_dag)
 
 
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Compile a BN into an AC")
-    parser.add_argument("--bn", type=str, help="Path to '.bn' file.")
-    parser.add_argument("--elim-ord", type=str,
-                        help="Elimination ordering to be used.", default="rev")
-    args = parser.parse_args()
-
-    bn = get_bn_from_file(args.bn)
-
-    elim_ord = bn.get_elimination_ordering(args.elim_ord)
-
+def reconstruct_bn(bn, elim_ord, plot=False):
     graphs = []
     graphs_subtitles = []
 
@@ -511,12 +504,12 @@ if __name__ == "__main__":
     graphs_subtitles.append("BN")
 
     ac = compile_variable_elimination(bn, elim_ord)
-    # graphs.append(ac)
-    # graphs_subtitles.append("AC")
+    graphs.append(ac)
+    graphs_subtitles.append("AC")
 
     ac = remove_parameters_ac(ac)
-    # graphs.append(ac)
-    # graphs_subtitles.append("Remove Parameters")
+    graphs.append(ac)
+    graphs_subtitles.append("Remove Parameters")
 
     ac = remove_barren_prod_ac(ac)
     graphs.append(ac)
@@ -542,9 +535,37 @@ if __name__ == "__main__":
     graphs.append(ac)
     graphs_subtitles.append("Remove Duplicated Products")
 
-    bn = get_bn(ac)
+    bn = get_bn(ac, contract_scope=True)
     graphs.append(bn)
     graphs_subtitles.append("Reconstructed BN")
 
     main_title = "Elimination Ordering: " + ",".join(elim_ord)
-    draw_subplot_graphs(graphs, graphs_subtitles, main_title)
+
+    if plot:
+        draw_subplot_graphs(graphs, graphs_subtitles, main_title)
+
+    return bn
+
+
+def remove_observables(bn):
+    mod_dag = bn.dag.copy()
+    mod_dag.remove_nodes_from([n for n in mod_dag.nodes()
+                               if len(list(mod_dag.successors(n))) == 0])
+
+    return BayesianNetwork(mod_dag, None, None)
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Compile a BN into an AC")
+    parser.add_argument("--bn", type=str, help="Path to '.bn' file.")
+    parser.add_argument("--elim-ord", type=str,
+                        help="Elimination ordering to be used.", default="rev")
+    args = parser.parse_args()
+
+    bn = get_bn_from_file(args.bn)
+
+    all_elim_ord = list(nx.algorithms.dag.all_topological_sorts(bn.dag))
+    print("Total elimination oderings: " + str(len(all_elim_ord)))
+    for elim_ord in all_elim_ord:
+        elim_ord = list(reversed(elim_ord))
+        rec_bn = reconstruct_bn(bn, elim_ord, plot=True)
