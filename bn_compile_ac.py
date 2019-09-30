@@ -22,6 +22,8 @@ class BayesianNetwork:
         ordering = None
         if ord_type == "rev":
             ordering = list(reversed(list(nx.topological_sort(self.dag))))
+        if ord_type == "top":
+            ordering = list(nx.topological_sort(self.dag))
         elif ord_type == "mn":
             ordering = greedy_ordering(
                 self.moral_graph(), heuristic_min_neighbour,
@@ -369,7 +371,14 @@ def remove_indicators_ac(ac):
     mod_dag = ac.dag.copy()
     for node in [n for n in mod_dag.nodes()]:
         if "I" in node:
-            mod_dag.remove_node(node)
+            all_sum_prod = True
+            for parent in mod_dag.predecessors(node):
+                for sibling in mod_dag.successors(parent):
+                    if sibling != node and not (
+                            "+" in sibling or "*" in sibling):
+                        all_sum_prod = False
+            if all_sum_prod:
+                mod_dag.remove_node(node)
     return ArithmeticCircuit(mod_dag)
 
 
@@ -443,12 +452,12 @@ if __name__ == "__main__":
     ac = remove_indicators_ac(ac)
     graphs.append(ac)
     graphs_subtitles.append("Remove Indicators")
-    ac = remove_redundant_prod_ac(ac)
-    graphs.append(ac)
-    graphs_subtitles.append("Remove Redundant Products")
     ac = remove_barren_prod_ac(ac)
     graphs.append(ac)
     graphs_subtitles.append("Remove Barren Products")
+    ac = remove_redundant_prod_ac(ac)
+    graphs.append(ac)
+    graphs_subtitles.append("Remove Redundant Products")
 
     main_title = "Elimination Ordering: " + ",".join(elim_ord)
     draw_subplot_graphs(graphs, graphs_subtitles, main_title)
