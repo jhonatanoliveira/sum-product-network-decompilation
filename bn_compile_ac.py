@@ -375,7 +375,8 @@ def remove_indicators_ac(ac):
             for parent in mod_dag.predecessors(node):
                 for sibling in mod_dag.successors(parent):
                     if sibling != node and not (
-                            "+" in sibling or "*" in sibling or "T" in sibling):
+                            "+" in sibling or
+                            "*" in sibling or "T" in sibling):
                         all_sum_prod = False
             if all_sum_prod:
                 mod_dag.remove_node(node)
@@ -418,6 +419,60 @@ def remove_doubled_prod_ac(ac):
                 if len(list(mod_dag.predecessors(node))) == 0:
                     mod_dag.remove_node(node)
     return ArithmeticCircuit(mod_dag)
+
+
+def get_bn(ac):
+    # algorithm for detecting conditioning
+    def _is_conditioning(anc, sum_node, dag):
+        not_in_desc = False
+        for child in dag.successors(anc):
+            if node not in nx.algorithms.dag.descendants(dag, child):
+                not_in_desc = True
+                break
+        return not_in_desc
+    # compute node scopes
+    scopes = {}
+    for node in reversed(list(nx.topological_sort(ac.dag))):
+        if "+" in node or "*" in node:
+            scope = set()
+            for child in ac.dag.successors(node):
+                scope = scope.union(scopes[child])
+            scopes[node] = scope
+        elif "T" in node:
+            tmp = node.replace("T(", "").replace(")", "")
+            scope = set([tmp[:tmp.index("-")]])
+            scopes[node] = scope
+        else:
+            raise NotImplementedError("Node scope not defined")
+    # assign latent variable
+    latent_vars = {}
+    lv_scopes = []
+    lv_assigned = []
+    sum_lv_idx = 0
+    for node in reversed(list(nx.topological_sort(ac.dag))):
+        if "T" in node:
+            latent_vars[node] = list(scopes[node])[0]
+        elif "+" in node:
+            if scopes[node] in lv_scopes:
+                idx_lv = lv_scopes.index(scopes[node])
+                latent_vars[node] = lv_assigned[idx_lv]
+            else:
+                new_lv_assignment = "Zs-" + str(sum_lv_idx)
+                lv_scopes.append(scopes[node])
+                lv_assigned.append(new_lv_assignment)
+                latent_vars[node] = new_lv_assignment
+            sum_lv_idx += 1
+    # construct bn DAG
+    bn_dag = nx.DiGraph()
+    for node in reversed(list(nx.topological_sort(ac.dag))):
+        if "+" in node or "T" in node:
+            for anc in nx.algorithms.dag.ancestors(ac.dag, node):
+                if "+" in anc and _is_conditioning(anc, node, ac.dag):
+                    parent = latent_vars[anc]
+                    child = latent_vars[node]
+                    bn_dag.add_edge(parent, child)
+
+    return BayesianNetwork(bn_dag, None, None)
 
 
 def remove_duplicated_prod_ac(ac):
@@ -486,6 +541,10 @@ if __name__ == "__main__":
     ac = remove_duplicated_prod_ac(ac)
     graphs.append(ac)
     graphs_subtitles.append("Remove Duplicated Products")
+
+    bn = get_bn(ac)
+    graphs.append(bn)
+    graphs_subtitles.append("Reconstructed BN")
 
     main_title = "Elimination Ordering: " + ",".join(elim_ord)
     draw_subplot_graphs(graphs, graphs_subtitles, main_title)
