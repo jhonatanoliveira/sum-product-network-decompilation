@@ -34,11 +34,8 @@ class BayesianNetwork:
                 self.var_cardinalities)
         elif "," in ord_type:
             ordering = [v.strip() for v in ord_type.split(",")]
-            print_ordering = False
         else:
             raise NotImplementedError
-        if print_ordering:
-            print("Elimination Ordering: " + str(ordering))
 
         return ordering
 
@@ -563,9 +560,6 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     bn = get_bn_from_file(args.bn)
-
-    all_elim_ord = list(nx.algorithms.dag.all_topological_sorts(bn.dag))
-    print("Total elimination oderings: " + str(len(all_elim_ord)))
-    for elim_ord in all_elim_ord:
-        elim_ord = list(reversed(elim_ord))
-        rec_bn = reconstruct_bn(bn, elim_ord, plot=True)
+    elim_ord = bn.get_elimination_ordering(args.elim_ord)
+    print("Elimination Ordering: " + str(elim_ord))
+    reconstruct_bn(bn, elim_ord, plot=True)
