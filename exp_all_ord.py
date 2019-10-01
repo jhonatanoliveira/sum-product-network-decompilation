@@ -71,14 +71,16 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     bn_files = []
-    if args.bn.endswith(".bn"):
+    is_file = args.bn.endswith(".bn")
+    if is_file:
         bn_files = [args.bn]
     else:
         bn_files = os.listdir(args.bn)
 
     for bn_file_name in bn_files:
         if bn_file_name.endswith(".bn"):
-            bn_file = os.path.join("bns", bn_file_name)
+            bn_file = os.path.join("bns", bn_file_name) if not is_file \
+                else bn_file_name
             graphs, graphs_subtitles = all_top_ord(bn_file)
             name = bn_file[:-3]
             plot_graphs(

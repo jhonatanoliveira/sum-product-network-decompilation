@@ -6,7 +6,7 @@ import itertools
 import math
 import matplotlib
 matplotlib.use('TkAgg')
-import matplotlib.pyplot as plt
+import matplotlib.pyplot as plt  # noqa: E402
 
 
 class BayesianNetwork:
@@ -456,12 +456,13 @@ def get_bn(ac, contract_scope=True):
                     latent_vars[node] = lv_assigned[idx_lv]
                 else:
                     new_lv_assignment = "Zs-" + str(sum_lv_idx)
+                    sum_lv_idx += 1
                     lv_scopes.append(scopes[node])
                     lv_assigned.append(new_lv_assignment)
                     latent_vars[node] = new_lv_assignment
             else:
                 latent_vars[node] = "Zs-" + str(sum_lv_idx)
-            sum_lv_idx += 1
+                sum_lv_idx += 1
     # construct bn DAG
     bn_dag = nx.DiGraph()
     for node in reversed(list(nx.topological_sort(ac.dag))):
