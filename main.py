@@ -418,21 +418,23 @@ def remove_doubled_prod_ac(ac):
     return ArithmeticCircuit(mod_dag)
 
 
-def get_bn(ac, contract_scope=True):
-    # algorithm for detecting conditioning
-    def _is_conditioning(anc, sum_node, dag):
-        not_in_desc = False
-        for child in dag.successors(anc):
-            if node not in nx.algorithms.dag.descendants(dag, child):
-                not_in_desc = True
-                break
-        return not_in_desc
+# algorithm for detecting conditioning
+def is_conditioning(anc, sum_node, dag):
+    not_in_desc = False
+    for child in dag.successors(anc):
+        if sum_node not in nx.algorithms.dag.descendants(dag, child):
+            not_in_desc = True
+            break
+    return not_in_desc
+
+
+def spn_scope(spn_dag):
     # compute node scopes
     scopes = {}
-    for node in reversed(list(nx.topological_sort(ac.dag))):
+    for node in reversed(list(nx.topological_sort(spn_dag))):
         if "+" in node or "*" in node:
             scope = set()
-            for child in ac.dag.successors(node):
+            for child in spn_dag.successors(node):
                 scope = scope.union(scopes[child])
             scopes[node] = scope
         elif "T" in node:
@@ -441,34 +443,99 @@ def get_bn(ac, contract_scope=True):
             scopes[node] = scope
         else:
             raise NotImplementedError("Node scope not defined")
-    # assign latent variable
+    return scopes
+
+
+def spn_assign_lv_contract(spn_dag, spn_scopes, contract_scope=True):
     latent_vars = {}
     lv_scopes = []
     lv_assigned = []
     sum_lv_idx = 0
-    for node in reversed(list(nx.topological_sort(ac.dag))):
+    for node in reversed(list(nx.topological_sort(spn_dag))):
         if "T" in node:
-            latent_vars[node] = list(scopes[node])[0]
+            latent_vars[node] = list(spn_scopes[node])[0]
         elif "+" in node:
             if contract_scope:
-                if scopes[node] in lv_scopes:
-                    idx_lv = lv_scopes.index(scopes[node])
+                if spn_scopes[node] in lv_scopes:
+                    idx_lv = lv_scopes.index(spn_scopes[node])
                     latent_vars[node] = lv_assigned[idx_lv]
                 else:
                     new_lv_assignment = "Zs-" + str(sum_lv_idx)
                     sum_lv_idx += 1
-                    lv_scopes.append(scopes[node])
+                    lv_scopes.append(spn_scopes[node])
                     lv_assigned.append(new_lv_assignment)
                     latent_vars[node] = new_lv_assignment
             else:
                 latent_vars[node] = "Zs-" + str(sum_lv_idx)
                 sum_lv_idx += 1
+    return latent_vars
+
+
+def spn_assign_lv_sum_depth(spn_dag, spn_scopes):
+    sum_depth_layers = make_sum_depth_layers(spn_dag)
+    latent_vars = {}
+    sum_lv_idx = 0
+    for layer in sum_depth_layers:
+        lv_scopes = []
+        lv_assigned = []
+        for node in layer:
+            if "T" in node:
+                latent_vars[node] = list(spn_scopes[node])[0]
+            elif "+" in node:
+                if spn_scopes[node] in lv_scopes:
+                    idx_lv = lv_scopes.index(spn_scopes[node])
+                    latent_vars[node] = lv_assigned[idx_lv]
+                else:
+                    new_lv_assignment = "Zs-" + str(sum_lv_idx)
+                    sum_lv_idx += 1
+                    lv_scopes.append(spn_scopes[node])
+                    lv_assigned.append(new_lv_assignment)
+                    latent_vars[node] = new_lv_assignment
+    return latent_vars
+
+
+def make_sum_depth_layers(spn_dag):
+    layers = []
+    root_layer = [n for n in spn_dag.nodes()
+                  if len(list(spn_dag.predecessors(n))) == 0]
+    layers.append(root_layer)
+    to_search_sum_layers = [root_layer[:]]
+    while len(to_search_sum_layers) > 0:
+        curr_layer = to_search_sum_layers.pop(0)
+        to_search_in_layer = curr_layer[:]
+        marked = curr_layer[:]
+        next_sum_layer = []
+        while len(to_search_in_layer) > 0:
+            curr_node = to_search_in_layer.pop(0)
+            next_nodes = []
+            for child in spn_dag.successors(curr_node):
+                if child not in next_sum_layer and\
+                        all([p in marked
+                             for p in spn_dag.predecessors(child)]):
+                    if "T" in child or "+" in child:
+                        next_sum_layer.append(child)
+                    elif "*" in child:
+                        next_nodes.append(child)
+                    else:
+                        raise ValueError
+            to_search_in_layer += next_nodes
+            marked += next_nodes
+        if len(next_sum_layer) > 0:
+            layers.append(next_sum_layer)
+            to_search_sum_layers.append(next_sum_layer)
+    return layers
+
+
+def get_bn(ac, assign_lv):
+    scopes = spn_scope(ac.dag)
+    # assign latent variable
+    latent_vars = assign_lv(ac.dag, scopes)
     # construct bn DAG
     bn_dag = nx.DiGraph()
     for node in reversed(list(nx.topological_sort(ac.dag))):
         if "+" in node or "T" in node:
             for anc in nx.algorithms.dag.ancestors(ac.dag, node):
-                if "+" in anc and _is_conditioning(anc, node, ac.dag):
+                if "+" in anc and is_conditioning(anc, node, ac.dag):
                     parent = latent_vars[anc]
                     child = latent_vars[node]
                     bn_dag.add_edge(parent, child)
@@ -533,7 +600,7 @@ def reconstruct_bn(bn, elim_ord, plot=False):
     graphs.append(ac)
     graphs_subtitles.append("Remove Duplicated Products")
 
-    bn = get_bn(ac, contract_scope=True)
+    bn = get_bn(ac, spn_assign_lv_sum_depth)
     graphs.append(bn)
     graphs_subtitles.append("Reconstructed BN")
 
