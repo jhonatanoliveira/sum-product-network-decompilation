@@ -566,7 +566,9 @@ def reconstruct_bn(bn, elim_ord, plot=False):
     graphs_subtitles = []
 
     graphs.append(bn)
-    graphs_subtitles.append("BN")
+    graphs_subtitles.append("BN - Size: " +
+                            str("(" + str(len(bn.dag.nodes())) +
+                                ", " + str(len(bn.dag.edges())) + ")"))
 
     ac = compile_variable_elimination(bn, elim_ord)
     graphs.append(ac)
@@ -602,7 +604,9 @@ def reconstruct_bn(bn, elim_ord, plot=False):
 
     bn = get_bn(ac, spn_assign_lv_sum_depth)
     graphs.append(bn)
-    graphs_subtitles.append("Reconstructed BN")
+    graphs_subtitles.append("Reconstructed BN - Size: " +
+                            str("(" + str(len(bn.dag.nodes())) +
+                                ", " + str(len(bn.dag.edges())) + ")"))
 
     main_title = "Elimination Ordering: " + ",".join(elim_ord)
 
