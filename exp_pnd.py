@@ -85,6 +85,8 @@ if __name__ == "__main__":
     bn = get_bn(ac, spn_assign_lv_sum_depth)
 
     graphs = [ac, bn]
-    graphs_subtitles = ["P&D SPN", "Decompiled BN"]
+    graphs_subtitles = ["P&D SPN - Image (" +
+                        str(height) + "," + str(width) + ")",
+                        "Decompiled BN"]
     main_title = "Decompiling P&D SPN"
     draw_subplot_graphs(graphs, graphs_subtitles, main_title)
