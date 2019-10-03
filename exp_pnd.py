@@ -6,7 +6,8 @@ import networkx as nx
 
 if __name__ == "__main__":
 
-    height, width, delta = 2, 2, 1
+    size = 3
+    height, width, delta = size, size, 1
     input_leaves_amt = 2
     sum_nodes_amt = 2
 
@@ -44,6 +45,7 @@ if __name__ == "__main__":
                 distributions[partition] = []
                 sum_nodes = [distributions[region] for region in partition]
                 for prod_children in itertools.product(*sum_nodes):
+                    prod_children = list(prod_children)
                     prod_name = "*" + str(prod_counter)
                     prod_counter += 1
                     distributions[partition].append(prod_name)
@@ -61,8 +63,8 @@ if __name__ == "__main__":
                         distributions[region].append(sum_name)
                         dag.add_node(sum_name)
                         for partition in layers[layer_idx - 1]:
-                            rec_region = list(set().union(*partition))
-                            if rec_region == list(region):
+                            rec_region = set().union(*partition)
+                            if rec_region == set(region):
                                 sum_children = distributions[partition]
                                 dag.add_edges_from(
                                     list(itertools.product(
