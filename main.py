@@ -605,7 +605,7 @@ def reconstruct_bn(bn, elim_ord, plot=False):
 
     bn = get_bn(ac, spn_assign_lv_sum_depth)
     graphs.append(bn)
-    graphs_subtitles.append("Reconstructed BN - Size: " +
+    graphs_subtitles.append("Decompiled BN - Size: " +
                             str("(" + str(len(bn.dag.nodes())) +
                                 ", " + str(len(bn.dag.edges())) + ")"))
 

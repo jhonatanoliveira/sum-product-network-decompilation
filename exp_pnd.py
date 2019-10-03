@@ -1,12 +1,19 @@
 from region_graph import RegionGraph
-from main import ArithmeticCircuit
+from main import ArithmeticCircuit, get_bn, spn_assign_lv_sum_depth,\
+    draw_subplot_graphs
 import itertools
+import argparse
 import networkx as nx
 
 
 if __name__ == "__main__":
 
-    size = 3
+    parser = argparse.ArgumentParser(
+        description="Compile P&D into an AC and decompile to BN")
+    parser.add_argument("--size", type=int, help="Consider image size x size")
+    args = parser.parse_args()
+
+    size = args.size
     height, width, delta = size, size, 1
     input_leaves_amt = 2
     sum_nodes_amt = 2
@@ -14,12 +21,6 @@ if __name__ == "__main__":
     pd = RegionGraph(list(range(height * width)))
     pd.make_poon_structure(width, height, 1)
     layers = pd.make_layers()
-
-    print("******** Layers ********")
-    for l_idx, l in enumerate(layers):
-        print(":: Layer " + str(l_idx) + " - " + str(l))
-    print()
-    print()
 
     dag = nx.DiGraph()
 
@@ -79,5 +80,11 @@ if __name__ == "__main__":
                     sum_children = distributions[partition]
                     dag.add_edges_from(list(itertools.product(
                         [sum_name], sum_children)))
+
     ac = ArithmeticCircuit(dag)
-    ac.draw()
+    bn = get_bn(ac, spn_assign_lv_sum_depth)
+
+    graphs = [ac, bn]
+    graphs_subtitles = ["P&D SPN", "Decompiled BN"]
+    main_title = "Decompiling P&D SPN"
+    draw_subplot_graphs(graphs, graphs_subtitles, main_title)

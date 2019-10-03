@@ -9,7 +9,7 @@ def plot_graphs(name, graphs, graphs_subtitles,
     graphs = [g for g in graphs]
     graphs_subtitles = [g for g in graphs_subtitles]
 
-    main_title = name + ", reconstructions: " + str(len(graphs) - 1)
+    main_title = name + ", decompilations: " + str(len(graphs) - 1)
 
     if plot_diff:
         diff_countings = []  # [(#nodes, #edges)]
@@ -29,7 +29,7 @@ def plot_graphs(name, graphs, graphs_subtitles,
         main_title += ", Max Plot: " + str(max_plot_rec)
 
     if plot_diff and len(graphs) < 3:
-        print("No different reconstructions")
+        print("No different decompilations")
     else:
         draw_subplot_graphs(graphs, graphs_subtitles, main_title)
 
@@ -62,11 +62,11 @@ if __name__ == "__main__":
     parser.add_argument("--bn", type=str, help="Path to '.bn' file.")
     parser.add_argument(
         "--max-plot-rec", type=int,
-        help="Max amount of plotting reconstructions.",
+        help="Max amount of plotting decompilations.",
         default=-1)
     parser.add_argument(
         "--plot-diff",
-        help="Force to print all reconstructions.",
+        help="Force to print all decompilations.",
         action="store_true")
     args = parser.parse_args()
 
