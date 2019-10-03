@@ -51,7 +51,10 @@ def all_top_ord(bn_file):
         rec_bn = reconstruct_bn(bn, elim_ord, plot=False)
         graphs.append(rec_bn)
         graphs_subtitles.append(
-            "#" + str(idx) + " - " + ",".join(elim_ord))
+            "#" + str(idx) +
+            "- (N,E): (" + str(len(rec_bn.dag.nodes())) + "," +
+            str(len(rec_bn.dag.edges())) + ")" +
+            " - " + ",".join(elim_ord))
 
     return (graphs, graphs_subtitles)
 
@@ -66,7 +69,7 @@ if __name__ == "__main__":
         default=-1)
     parser.add_argument(
         "--plot-diff",
-        help="Force to print all decompilations.",
+        help="Plot only the graphs with differences in #nodes, edges.",
         action="store_true")
     args = parser.parse_args()
 
@@ -75,12 +78,12 @@ if __name__ == "__main__":
     if is_file:
         bn_files = [args.bn]
     else:
-        bn_files = os.listdir(args.bn)
+        bn_files = [os.path.join("bns", name)
+                    for name in os.listdir(args.bn)]
 
     for bn_file_name in bn_files:
         if bn_file_name.endswith(".bn"):
-            bn_file = os.path.join("bns", bn_file_name) if not is_file \
-                else bn_file_name
+            bn_file = bn_file_name if not is_file else bn_file_name
             graphs, graphs_subtitles = all_top_ord(bn_file)
             name = bn_file[:-3]
             plot_graphs(

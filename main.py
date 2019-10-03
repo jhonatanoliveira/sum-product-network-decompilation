@@ -113,6 +113,19 @@ class ArithmeticCircuit:
         draw_graph(self.dag, show, color_map, labels)
 
 
+
+def construct_factors(bn_dag, var_cardinalities):
+    factors = {}
+    for node in bn_dag.nodes():
+        variables = [node] + list(bn_dag.predecessors(node))
+        cardinalities = {var: var_cardinalities[var] for var in variables}
+        total_values = reduce(
+            (lambda x, y: x * y), [cardinalities[k] for k in cardinalities])
+        values = [0 for _ in range(0, total_values)]
+        factor = Factor(variables, cardinalities, values)
+        factors[node] = factor
+    return factors
+
 def get_bn_from_file(bn_file_name):
     # Construct the DAG
     bn_dag = nx.DiGraph()
@@ -130,15 +143,7 @@ def get_bn_from_file(bn_file_name):
             bn_dag.add_edge(parent, child)
             edge_line = bn_file.readline().replace("\n", "")
     # Construct the factors
-    factors = {}
-    for node in bn_dag.nodes():
-        variables = [node] + list(bn_dag.predecessors(node))
-        cardinalities = {var: var_cardinalities[var] for var in variables}
-        total_values = reduce(
-            (lambda x, y: x * y), [cardinalities[k] for k in cardinalities])
-        values = [0 for _ in range(0, total_values)]
-        factor = Factor(variables, cardinalities, values)
-        factors[node] = factor
+    factors = construct_factors(bn_dag, var_cardinalities)
     return BayesianNetwork(bn_dag, var_cardinalities, factors)
 
 
@@ -527,7 +532,7 @@ def make_sum_depth_layers(spn_dag):
     return layers
 
 
-def get_bn(ac, assign_lv):
+def get_bn(ac, assign_lv, var_cardinalities=None):
     scopes = spn_scope(ac.dag)
     # assign latent variable
     latent_vars = assign_lv(ac.dag, scopes)
@@ -540,8 +545,13 @@ def get_bn(ac, assign_lv):
                     parent = latent_vars[anc]
                     child = latent_vars[node]
                     bn_dag.add_edge(parent, child)
+    # Assume cardinalities 2 if none is given
+    if var_cardinalities is None:
+        var_cardinalities = {var: 2 for var in bn_dag.nodes()}
+    # Construct the factors
+    factors = construct_factors(bn_dag, var_cardinalities)
 
-    return BayesianNetwork(bn_dag, None, None)
+    return BayesianNetwork(bn_dag, var_cardinalities, factors)
 
 
 def remove_duplicated_prod_ac(ac):
