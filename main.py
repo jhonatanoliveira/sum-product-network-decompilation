@@ -500,10 +500,11 @@ def make_sum_depth_layers(spn_dag):
                   if len(list(spn_dag.predecessors(n))) == 0]
     layers.append(root_layer)
     to_search_sum_layers = [root_layer[:]]
+    marked = []
     while len(to_search_sum_layers) > 0:
         curr_layer = to_search_sum_layers.pop(0)
         to_search_in_layer = curr_layer[:]
-        marked = curr_layer[:]
+        marked += curr_layer[:]
         next_sum_layer = []
         while len(to_search_in_layer) > 0:
             curr_node = to_search_in_layer.pop(0)
