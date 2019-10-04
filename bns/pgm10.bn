@@ -1,0 +1,17 @@
+a:2,b:2,c:2,d:2,e:2,f:2,g:2,h:2,i:2,j:2,k:2,l:2
+a,b
+b,c
+b,e
+c,d
+d,e
+d,h
+e,g
+f,g
+f,l
+g,h
+g,k
+h,i
+h,j
+i,l
+j,l
+k,l
