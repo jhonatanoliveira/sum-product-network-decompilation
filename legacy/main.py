@@ -113,7 +113,6 @@ class ArithmeticCircuit:
         draw_graph(self.dag, show, color_map, labels)
 
 
-
 def construct_factors(bn_dag, var_cardinalities):
     factors = {}
     for node in bn_dag.nodes():
@@ -125,6 +124,7 @@ def construct_factors(bn_dag, var_cardinalities):
         factor = Factor(variables, cardinalities, values)
         factors[node] = factor
     return factors
+
 
 def get_bn_from_file(bn_file_name):
     # Construct the DAG
