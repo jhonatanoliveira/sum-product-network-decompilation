@@ -201,4 +201,4 @@ class EliminationOrdering:
         return reduce(
                 (lambda x, y: x * y),
                 [cardinalities[n] for n in neighbours])\
-            if len(neighbours) > 0 else 
+            if len(neighbours) > 0 else 1
