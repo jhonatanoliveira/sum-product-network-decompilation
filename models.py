@@ -1,3 +1,4 @@
+import math
 from functools import reduce
 import networkx as nx
 from networkx.drawing.nx_agraph import graphviz_layout
@@ -125,3 +126,64 @@ class ArithmeticCircuit(ProbabilisticGraphicalModel):
                 tmp = node.replace("T(", "").replace(")", "")
                 labels[node] = tmp[:tmp.index("-")]
         self.draw_graph(self.dag, show, color_map, labels)
+
+
+class SumProductNetwork(ProbabilisticGraphicalModel):
+
+    def __init__(self, dag):
+        self.dag = dag
+
+    def draw(self, show=True):
+        SUM_COLOR, PROD_COLOR, IND_COLOR, PROB_COLOR, TERM_COLOR =\
+            "#DEE5E5", "#009DDC", "#F26430", "#6761A8", "#009B72"
+        SUM_LABEL, PROD_LABEL = "+", "x"
+        color_map = []
+        labels = {}
+        for node in self.dag.nodes():
+            if "+" in node:
+                color_map.append(SUM_COLOR)
+                labels[node] = SUM_LABEL
+            elif "*" in node:
+                color_map.append(PROD_COLOR)
+                labels[node] = PROD_LABEL
+            elif "I" in node:
+                color_map.append(IND_COLOR)
+                labels[node] = node.replace("I(", "").replace(")", "")
+            elif "P" in node:
+                color_map.append(PROB_COLOR)
+                labels[node] = ""
+            elif "T" in node:
+                color_map.append(TERM_COLOR)
+                tmp = node.replace("T(", "").replace(")", "")
+                labels[node] = tmp[:tmp.index("-")]
+        self.draw_graph(self.dag, show, color_map, labels)
+
+
+class SubplotDrawer:
+
+    def __init__(self, main_title=None):
+        self.graphs = []
+        self.subtitles = []
+        self.main_title = main_title if main_title else "Graphs"
+
+    def add(self, graph, subtitle=None):
+        self.graphs.append(graph)
+        _sub = subtitle if subtitle else "Graph " + str(len(self.graphs))
+        self.subtitles.append(_sub)
+
+    def plot(self):
+        total_graphs = len(self.graphs)
+        subplot_amt = math.ceil(math.sqrt(total_graphs))
+        subplot_rows = (subplot_amt - 1)\
+            if (subplot_amt * subplot_amt - total_graphs) >= subplot_amt\
+            else subplot_amt
+        plt.figure()
+        for i, graph in enumerate(self.graphs):
+            plt.subplot(subplot_rows, subplot_amt, i + 1)
+            graph.draw(show=False)
+            if self.subtitles:
+                plt.title(self.subtitles[i])
+            plt.grid(True)
+        if self.main_title:
+            plt.suptitle(self.main_title)
+        plt.show()

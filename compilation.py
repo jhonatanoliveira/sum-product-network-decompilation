@@ -148,7 +148,9 @@ class EliminationOrdering:
         return H
 
     @staticmethod
-    def get_elimination_ordering(dag, var_cardinalities, ord_type):
+    def get_elimination_ordering(bn, ord_type):
+        dag = bn.dag
+        var_cardinalities = bn.var_cardinalities
         moral_graph = EliminationOrdering.moral_graph(dag)
         ordering = None
         if ord_type == "rev":
