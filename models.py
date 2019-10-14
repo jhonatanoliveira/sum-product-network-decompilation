@@ -56,6 +56,8 @@ class ProbabilisticGraphicalModel:
         if show:
             plt.show()
 
+    def copy(self):
+        raise NotImplementedError
 
 class BayesianNetwork(ProbabilisticGraphicalModel):
 
@@ -157,6 +159,9 @@ class SumProductNetwork(ProbabilisticGraphicalModel):
                 tmp = node.replace("T(", "").replace(")", "")
                 labels[node] = tmp[:tmp.index("-")]
         self.draw_graph(self.dag, show, color_map, labels)
+
+    def copy(self):
+        return SumProductNetwork(self.dag.copy())
 
 
 class SubplotDrawer:
