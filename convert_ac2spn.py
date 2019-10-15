@@ -22,10 +22,33 @@ def remove_barren_prod(ac):
                     list(itertools.product(parents, children)))
                 ac.dag.remove_node(node)
                 found = True
-    return ac
 
 
-def remove_doubled_prod(ac):
+def add_terminal_node(ac):
+    terminal_counter = 0
+    for node in [n for n in ac.dag.nodes()]:
+        children = list(ac.dag.successors(node))
+        if "+" in node and len(children) > 0\
+                and all(["I" in c for c in children]):
+            a_child = children[0]
+            term_node = a_child.replace("I(", "").replace(")", "")
+            term_node = term_node[:term_node.index("-")]
+            term_node += "-" + str(terminal_counter)
+            term_node = "T(" + term_node + ")"
+            terminal_counter += 1
+            ac.dag.add_node(term_node)
+            parents = list(ac.dag.predecessors(node))
+            ac.dag.add_edges_from(
+                list(itertools.product(parents, [term_node])))
+            ac.dag.remove_node(node)
+    for node in [n for n in ac.dag.nodes()]:
+        children = list(ac.dag.successors(node))
+        parents = list(ac.dag.predecessors(node))
+        if len(children) == 0 and len(parents) == 0:
+            ac.dag.remove_node(node)
+
+
+def remove_prod_of_prod(ac):
     found = True
     while found:
         found = False
@@ -41,7 +64,22 @@ def remove_doubled_prod(ac):
                         found = True
                 if len(list(ac.dag.predecessors(node))) == 0:
                     ac.dag.remove_node(node)
-    return ac
+
+
+def lump_prod_over_same_children(ac):
+    seen_prods, seen_children = [], []  # Key, Value
+    for node in [n for n in ac.dag.nodes()]:
+        if "*" in node:
+            ch = set(list(ac.dag.successors(node)))
+            if ch in seen_children:
+                parents = list(ac.dag.predecessors(node))
+                prod_to_connec = seen_prods[seen_children.index(ch)]
+                ac.dag.add_edges_from(
+                    itertools.product(parents, [prod_to_connec]))
+                ac.dag.remove_node(node)
+            else:
+                seen_children.append(ch)
+                seen_prods.append(node)
 
 
 def is_different(dag1, dag2):
@@ -59,12 +97,40 @@ def is_different(dag1, dag2):
 def _apply_transformation_check_diff(spn, trans_func,
                                      drawer, subtitle):
     is_diff = False
-    ori_spn = spn.copy()
-    trans_spn = trans_func(ori_spn)
-    if is_different(ori_spn.dag, trans_spn.dag):
+    trans_spn = spn.copy()
+    trans_func(trans_spn)
+    if is_different(spn.dag, trans_spn.dag):
         is_diff = True
-        drawer.add(trans_spn, subtitle)
+        if drawer:
+            drawer.add(trans_spn, subtitle)
     return trans_spn, is_diff
+
+
+def simplify(spn, subplot_drawer=None):
+
+    has_changed = True
+    while has_changed:
+        has_changed = False
+
+        spn, is_diff = _apply_transformation_check_diff(
+            spn, add_terminal_node, subplot_drawer, "Add Terminal Nodes")
+        has_changed = (has_changed or is_diff)
+
+        spn, is_diff = _apply_transformation_check_diff(
+            spn, remove_barren_prod, subplot_drawer, "Remove Barren Products")
+        has_changed = (has_changed or is_diff)
+
+        spn, is_diff = _apply_transformation_check_diff(
+            spn, remove_prod_of_prod, subplot_drawer,
+            "Remove Products of Products")
+        has_changed = (has_changed or is_diff)
+
+        spn, is_diff = _apply_transformation_check_diff(
+            spn, lump_prod_over_same_children, subplot_drawer,
+            "Lump Products Over Same Children")
+        has_changed = (has_changed or is_diff)
+
+    return spn
 
 
 def convert_ac2spn(ac, subplot_drawer=None):
@@ -75,12 +141,6 @@ def convert_ac2spn(ac, subplot_drawer=None):
     spn = redistribute_parameters(spn)
     subplot_drawer.add(spn, "Redistribute Parameters")
 
-    has_changed = True
-    while has_changed:
-        has_changed = False
-
-        spn, is_diff = _apply_transformation_check_diff(
-            spn, remove_barren_prod, subplot_drawer, "Remove Barren Products")
-        has_changed = (has_changed or is_diff)
+    spn = simplify(spn, subplot_drawer)
 
     return spn

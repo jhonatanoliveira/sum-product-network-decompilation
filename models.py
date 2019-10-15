@@ -59,12 +59,14 @@ class ProbabilisticGraphicalModel:
     def copy(self):
         raise NotImplementedError
 
+
 class BayesianNetwork(ProbabilisticGraphicalModel):
 
     def __init__(self, dag, var_cardinalities, factors):
         # nx Graph
         self.dag = dag
         # Dict {'A': 2, 'B': 3}
+        self.variables = list(var_cardinalities.keys())
         self.var_cardinalities = var_cardinalities
         self.factors = factors
 
