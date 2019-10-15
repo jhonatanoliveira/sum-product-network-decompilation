@@ -8,7 +8,7 @@ if __name__ == "__main__":
 
     plotter = SubplotDrawer("Compiling and Decompiling BNs")
 
-    bn = BayesianNetwork.get_bn_from_file("bns/hmm.bn")
+    bn = BayesianNetwork.get_bn_from_file("bns/diamond2.bn")
     plotter.add(bn, "BN")
 
     elim_ord = EliminationOrdering.get_elimination_ordering(bn, "rev")
@@ -22,7 +22,11 @@ if __name__ == "__main__":
     spn = convert_ac2spn(ac, plotter)
 
     # Marginalized SPN
-    spn = compile_marginalized_spn(spn, ["H1", "X3"], None)
+    internal_nodes = [var for var in bn.dag.nodes()
+                      if len(list(bn.dag.successors(var))) > 0]
+    spn = compile_marginalized_spn(spn, internal_nodes,
+                                   collapse_sums=False, subplot_drawer=None)
     plotter.add(spn, "Compiled Marginalized SPN")
 
+    # Show subplots
     plotter.plot()
