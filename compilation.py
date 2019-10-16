@@ -130,7 +130,7 @@ def compile_variable_elimination(bn, elim_ord):
             ac_dag, prod_factor, variable, node_counters)
         curr_bn_factors.append(sum_factor)
 
-    return ArithmeticCircuit(ac_dag)
+    return ArithmeticCircuit(ac_dag, bn.var_cardinalities)
 
 
 class EliminationOrdering:

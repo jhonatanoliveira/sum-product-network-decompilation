@@ -136,7 +136,7 @@ def simplify(spn, subplot_drawer=None):
 def convert_ac2spn(ac, subplot_drawer=None):
 
     spn_dag = ac.dag.copy()
-    spn = SumProductNetwork(spn_dag)
+    spn = SumProductNetwork(spn_dag, ac.var_cardinalities)
 
     spn = redistribute_parameters(spn)
     subplot_drawer.add(spn, "Redistribute Parameters")

@@ -1,13 +1,11 @@
 import itertools
-from models import SumProductNetwork
 from convert_ac2spn import simplify
 
 
 def compile_marginalized_spn(spn, variables,
                              collapse_sums=False, subplot_drawer=None):
 
-    spn_dag = spn.dag.copy()
-    spn = SumProductNetwork(spn_dag)
+    spn = spn.copy()
 
     for node in [n for n in spn.dag.nodes()]:
         if (("I" in node) or ("T" in node))\

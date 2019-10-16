@@ -103,8 +103,10 @@ class BayesianNetwork(ProbabilisticGraphicalModel):
 
 class ArithmeticCircuit(ProbabilisticGraphicalModel):
 
-    def __init__(self, dag):
+    def __init__(self, dag, var_cardinalities):
         self.dag = dag
+        self.variables = list(var_cardinalities.keys())
+        self.var_cardinalities = var_cardinalities
 
     def draw(self, show=True):
         SUM_COLOR, PROD_COLOR, IND_COLOR, PROB_COLOR, TERM_COLOR =\
@@ -134,8 +136,27 @@ class ArithmeticCircuit(ProbabilisticGraphicalModel):
 
 class SumProductNetwork(ProbabilisticGraphicalModel):
 
-    def __init__(self, dag):
+    def __init__(self, dag, var_cardinalities):
         self.dag = dag
+        self.variables = list(var_cardinalities.keys())
+        self.var_cardinalities = var_cardinalities
+
+    def scopes(self):
+        # compute node scopes
+        scopes = {}
+        for node in reversed(list(nx.topological_sort(self.dag))):
+            if "+" in node or "*" in node:
+                scope = set()
+                for child in self.dag.successors(node):
+                    scope = scope.union(scopes[child])
+                scopes[node] = scope
+            elif "T" in node:
+                tmp = node.replace("T(", "").replace(")", "")
+                scope = set([tmp[:tmp.index("-")]])
+                scopes[node] = scope
+            else:
+                raise NotImplementedError("Node scope not defined")
+        return scopes
 
     def draw(self, show=True):
         SUM_COLOR, PROD_COLOR, IND_COLOR, PROB_COLOR, TERM_COLOR =\
@@ -163,7 +184,7 @@ class SumProductNetwork(ProbabilisticGraphicalModel):
         self.draw_graph(self.dag, show, color_map, labels)
 
     def copy(self):
-        return SumProductNetwork(self.dag.copy())
+        return SumProductNetwork(self.dag.copy(), self.var_cardinalities)
 
 
 class SubplotDrawer:
