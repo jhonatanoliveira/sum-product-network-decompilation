@@ -69,7 +69,7 @@ def make_sum_depth_layers(spn_dag):
                 if child not in next_sum_layer and\
                         all([p in marked
                              for p in spn_dag.predecessors(child)]):
-                    if "T" in child or "+" in child:
+                    if "T" in child or "+" in child or "I" in child:
                         next_sum_layer.append(child)
                     elif "*" in child:
                         next_nodes.append(child)

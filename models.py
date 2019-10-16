@@ -154,6 +154,10 @@ class SumProductNetwork(ProbabilisticGraphicalModel):
                 tmp = node.replace("T(", "").replace(")", "")
                 scope = set([tmp[:tmp.index("-")]])
                 scopes[node] = scope
+            elif "I" in node:
+                tmp = node.replace("I(", "").replace(")", "")
+                scope = set([tmp[:tmp.index("-")]])
+                scopes[node] = scope
             else:
                 raise NotImplementedError("Node scope not defined")
         return scopes

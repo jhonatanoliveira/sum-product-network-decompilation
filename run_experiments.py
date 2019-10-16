@@ -10,7 +10,7 @@ if __name__ == "__main__":
     bn_file_name = "bns/hmm.bn"
     is_collapse_sums = False
     elim_ord_type = "rev"
-    comp_marg_spn = "internal"
+    comp_marg_spn = "none"
 
     plotter = SubplotDrawer("Compiling and Decompiling BNs")
 
