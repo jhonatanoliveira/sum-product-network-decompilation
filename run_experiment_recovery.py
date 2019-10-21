@@ -7,6 +7,8 @@ import operator as op
 from functools import reduce
 import os
 import argparse
+import networkx as nx
+import itertools
 
 
 def ncr(n, r):
@@ -19,6 +21,22 @@ def ncr(n, r):
     return numer / denom
 
 
+def count_ancestor_moral_graph_edges(dag):
+    vstructures = [n for n in dag.nodes()
+                   if len(list(dag.predecessors(n))) > 1]
+    H = dag.to_undirected()
+    new_edges = 0
+    for vstructure in vstructures:
+        ancestors = nx.algorithms.dag.ancestors(dag, vstructure)
+        poss_new_edges = itertools.combinations(ancestors, r=2)
+        for (v1, v2) in poss_new_edges:
+            if (v1, v2) not in H.edges():
+                H.add_edge(v1, v2)
+                new_edges += 1
+
+    return new_edges
+
+
 def are_bns_same(ori_bn, decomp_bn):
     amt_parents_v_struct = [len(list(ori_bn.dag.predecessors(n)))
                             for n in ori_bn.dag.nodes()
@@ -28,10 +46,11 @@ def are_bns_same(ori_bn, decomp_bn):
             map(lambda n: ncr(n, 2), amt_parents_v_struct)
         )
     )
-    ori_amt_edges = len(ori_bn.dag.edges)
-    decomp_amt_edges = len(decomp_bn.dag.edges)
+    extra_edges = count_ancestor_moral_graph_edges(ori_bn.dag)
     max_amt_edges = len(ori_bn.dag.edges) + extra_edges
 
+    ori_amt_edges = len(ori_bn.dag.edges)
+    decomp_amt_edges = len(decomp_bn.dag.edges)
     has_expec_amt_edges = decomp_amt_edges >= ori_amt_edges and\
         decomp_amt_edges <= max_amt_edges
     has_eq_amt_nodes = len(
@@ -49,7 +68,7 @@ if __name__ == "__main__":
         required=True)
     parser.add_argument(
         "--elim-ord", type=str, help="Elimination ordering type.",
-        choices=["rev", "top", "mn", "mw", "all_rev"], required=True)
+        choices=["rev", "top", "mn", "mw", "all-rev"], required=True)
     parser.add_argument(
         "--plot-all",
         help="Plot all graphs.",
@@ -120,10 +139,10 @@ if __name__ == "__main__":
             # --- Compare
             print("------ " + bn_name + " Report - Elim Ord: "
                   + str(i + 1) + "/" + str(len(all_elim_ord)) + " ------")
-            print("-> Ori BN #nodes: " + str(len(bn.dag.nodes())))
-            print("-> Decomp BN #nodes: " + str(len(decomp_bn.dag.nodes())))
-            print("-> Ori BN #edges: " + str(len(bn.dag.edges())))
-            print("-> Decomp BN #edges: " + str(len(decomp_bn.dag.edges())))
+            print("-> Ori BN #nodes: " + str(len(bn.dag.nodes())) +
+                  ", #edges: " + str(len(bn.dag.edges())))
+            print("-> Decomp BN #nodes: " + str(len(decomp_bn.dag.nodes()))
+                  + ", #edges: " + str(len(decomp_bn.dag.edges())))
             bns_same = are_bns_same(bn, decomp_bn)
             if not bns_same:
                 diff_decomp.append(bn_name)
