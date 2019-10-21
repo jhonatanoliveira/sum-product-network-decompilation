@@ -105,7 +105,10 @@ if __name__ == "__main__":
         for i, elim_ord in enumerate(all_elim_ord):
             plotter = SubplotDrawer("Compiling and Decompiling BN - " +
                                     bn_file_name)
-            plotter.add(bn, "BN")
+            plotter.add(bn, "BN" +
+                        "- #N:" + str(len(bn.dag.nodes())) +
+                        ",#E:" + str(len(bn.dag.edges()))
+                        )
 
             # --- Compile and Decompile
             # 1) Compilation
@@ -134,7 +137,10 @@ if __name__ == "__main__":
 
             # 4) Decompilation
             decomp_bn = decompile(spn, comp_assumption="ve")
-            plotter.add(decomp_bn, "Decompiled BN")
+            plotter.add(decomp_bn, "Decompiled BN" +
+                        "- #N:" + str(len(decomp_bn.dag.nodes())) +
+                        ",#E:" + str(len(decomp_bn.dag.edges()))
+                        )
 
             # --- Compare
             print("------ " + bn_name + " Report - Elim Ord: "
