@@ -51,7 +51,7 @@ class ProbabilisticGraphicalModel:
     def draw_graph(self, graph, show, color_map=None, labels=None):
         pos = graphviz_layout(graph, prog='dot')
         nx.draw(graph, pos, with_labels=True, arrows=True,
-                node_color=color_map, node_size=400,
+                node_color=color_map, node_size=350,
                 font_size=8, labels=labels)
         if show:
             plt.show()

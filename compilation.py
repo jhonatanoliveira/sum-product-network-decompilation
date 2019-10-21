@@ -165,6 +165,10 @@ class EliminationOrdering:
             ordering = EliminationOrdering.greedy_ordering(
                 moral_graph, EliminationOrdering.heuristic_min_weight,
                 var_cardinalities)
+        elif ord_type == "all_rev":
+            all_ordering = list(
+                nx.algorithms.dag.all_topological_sorts(bn.dag))
+            ordering = [list(reversed(elim_ord)) for elim_ord in all_ordering]
         elif "," in ord_type:
             ordering = [v.strip() for v in ord_type.split(",")]
         else:
