@@ -3,8 +3,6 @@ from compilation import compile_variable_elimination, EliminationOrdering
 from convert_ac2spn import convert_ac2spn
 from comp_marg_spn import compile_marginalized_spn
 from decompilation import decompile
-import operator as op
-from functools import reduce
 import os
 import argparse
 import networkx as nx
@@ -42,26 +40,11 @@ def triangulate(dag, elim_ord):
     return moral_graph
 
 
-def are_bns_same(ori_bn, decomp_bn):
-    amt_parents_v_struct = [len(list(ori_bn.dag.predecessors(n)))
-                            for n in ori_bn.dag.nodes()
-                            if len(list(ori_bn.dag.predecessors(n))) > 1]
-    extra_edges = sum(
-        list(
-            map(lambda n: ncr(n, 2), amt_parents_v_struct)
-        )
-    )
-    extra_edges = count_ancestor_moral_graph_edges(ori_bn.dag)
-    max_amt_edges = len(ori_bn.dag.edges) + extra_edges
+def is_decomp_bn_same(ori_bn, decomp_bn, elim_ord):
+    triang_ori = triangulate(ori_bn.dag, elim_ord)
+    undirected_decomp = decomp_bn.dag.to_undirected()
 
-    ori_amt_edges = len(ori_bn.dag.edges)
-    decomp_amt_edges = len(decomp_bn.dag.edges)
-    has_expec_amt_edges = decomp_amt_edges >= ori_amt_edges and\
-        decomp_amt_edges <= max_amt_edges
-    has_eq_amt_nodes = len(
-        ori_bn.dag.nodes()) == len(decomp_bn.dag.nodes())
-
-    return has_eq_amt_nodes and has_expec_amt_edges
+    return nx.is_isomorphic(triang_ori, undirected_decomp)
 
 
 if __name__ == "__main__":
@@ -154,13 +137,15 @@ if __name__ == "__main__":
                   ", #edges: " + str(len(bn.dag.edges())))
             print("-> Decomp BN #nodes: " + str(len(decomp_bn.dag.nodes()))
                   + ", #edges: " + str(len(decomp_bn.dag.edges())))
-            bns_same = are_bns_same(bn, decomp_bn)
+            bns_same = is_decomp_bn_same(bn, decomp_bn, elim_ord)
             if not bns_same:
                 diff_decomp.append(bn_name)
             if (plot_diff and not bns_same) or plot_all:
                 plotter.plot()
 
-    print("--- Report ---")
+    print("******************")
+    print("***** Report *****")
+    print("******************")
     print("-> Different decompilations: " + str(len(diff_decomp))
           + "/" + str(len(bn_files)))
     print("-> Diff decomp BNs:" + str(diff_decomp))
