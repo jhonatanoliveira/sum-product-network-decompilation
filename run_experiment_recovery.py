@@ -37,6 +37,21 @@ def count_ancestor_moral_graph_edges(dag):
     return new_edges
 
 
+def triangulate(dag, elim_ord):
+    moral_graph = EliminationOrdering.moral_graph(dag)
+    graph_cp = moral_graph.copy()
+    for var in elim_ord:
+        poss_edges = itertools.combinations(
+            list(graph_cp.neighbors(var)), r=2)
+        for edge in poss_edges:
+            if edge not in graph_cp.edges():
+                moral_graph.add_edge(edge[0], edge[1])
+                graph_cp.add_edge(edge[0], edge[1])
+        graph_cp.remove_node(var)
+
+    return moral_graph
+
+
 def are_bns_same(ori_bn, decomp_bn):
     amt_parents_v_struct = [len(list(ori_bn.dag.predecessors(n)))
                             for n in ori_bn.dag.nodes()
