@@ -11,16 +11,6 @@ import networkx as nx
 import itertools
 
 
-def ncr(n, r):
-    # Code from:
-    # https://stackoverflow.com/questions/
-    # 4941753/is-there-a-math-ncr-function-in-python
-    r = min(r, n-r)
-    numer = reduce(op.mul, range(n, n-r, -1), 1)
-    denom = reduce(op.mul, range(1, r+1), 1)
-    return numer / denom
-
-
 def count_ancestor_moral_graph_edges(dag):
     vstructures = [n for n in dag.nodes()
                    if len(list(dag.predecessors(n))) > 1]
