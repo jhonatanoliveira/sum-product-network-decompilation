@@ -1,4 +1,4 @@
-from models import BayesianNetwork, SubplotDrawer
+from models import BayesianNetwork, Factor, SubplotDrawer
 from compilation import compile_variable_elimination, EliminationOrdering
 from convert_ac2spn import convert_ac2spn
 from comp_marg_spn import compile_marginalized_spn
@@ -6,7 +6,35 @@ from decompilation import decompile
 import os
 import argparse
 import networkx as nx
+import numpy as np
 import itertools
+
+
+def connected_dags(N):
+    assert N > 1
+    prev_BNs = [np.zeros((1, 1), dtype=np.int64)] if N == 2 else\
+        connected_dags(N-1)
+    for B in prev_BNs:
+        for k in range(1, 2**(N-1)):
+            new_BN = np.zeros((N, N), dtype=np.int64)
+            new_BN[0, 1:] = np.array(
+                [int(b) for b in np.binary_repr(k, width=N-1)])
+            new_BN[1:, 1:] = B
+            yield new_BN
+
+
+def generate_all_bns(num_vars, var_cardinalities=None):
+    if var_cardinalities is None:
+        var_cardinalities = {var: 2 for var in range(num_vars)}
+    bns = []
+    for adj_matrix in connected_dags(num_vars):
+        dag = nx.convert_matrix.from_numpy_matrix(
+            adj_matrix, create_using=nx.DiGraph)
+        factors = Factor.construct_factors(dag, var_cardinalities)
+        bn = BayesianNetwork(dag, var_cardinalities, factors)
+        bns.append(bn)
+
+    return bns
 
 
 def count_ancestor_moral_graph_edges(dag):
@@ -38,6 +66,23 @@ def triangulate(dag, elim_ord):
         graph_cp.remove_node(var)
 
     return moral_graph
+
+
+# def is_exaustive_isomorphic(graph1, graph2):
+#     is_iso = True or len(graph1.nodes()) == len(graph2.nodes())
+#     # Check leaf equality
+#     leaves_g1 = [n for n in graph1.nodes()
+#                  if graph1.successors(n) == 0]
+#     leaves_g2 = [n for n in graph2.nodes()
+#                  if graph2.successors(n) == 0]
+#     is_iso = is_iso or len(leaves_g1) == len(leaves_g2)
+#     is_iso = is_iso or all([l1 in leaves_g2 for l1 in leaves_g1])
+#     # Check internal nodes equality
+#     comp_graph = graph2.copy()
+#     node_labels = [n for n in graph1.nodes()]
+#     old_labels = [n for n in comp_graph.nodes()]
+#     for new_labels in itertools.permutations(node_labels):
+        
 
 
 def is_decomp_bn_same(ori_bn, decomp_bn, elim_ord):
