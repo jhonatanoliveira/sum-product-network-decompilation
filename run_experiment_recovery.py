@@ -8,6 +8,8 @@ import argparse
 import networkx as nx
 import numpy as np
 import itertools
+import time
+from joblib import Parallel, delayed
 
 
 def connected_dags(N):
@@ -25,11 +27,18 @@ def connected_dags(N):
 
 def generate_all_bns(num_vars, var_cardinalities=None):
     if var_cardinalities is None:
-        var_cardinalities = {var: 2 for var in range(num_vars)}
+        var_cardinalities = {"X" + str(var): 2
+                             for var in range(num_vars)}
     bns = []
+    i = 0
     for adj_matrix in connected_dags(num_vars):
         dag = nx.convert_matrix.from_numpy_matrix(
             adj_matrix, create_using=nx.DiGraph)
+        dag.graph["name"] = "BN-" + str(i)
+        str_node_labels = {old_lbl: "X" + str(old_lbl)
+                           for old_lbl in dag.nodes()}
+        dag = nx.relabel_nodes(dag, str_node_labels)
+        i += 1
         factors = Factor.construct_factors(dag, var_cardinalities)
         bn = BayesianNetwork(dag, var_cardinalities, factors)
         bns.append(bn)
@@ -68,28 +77,158 @@ def triangulate(dag, elim_ord):
     return moral_graph
 
 
-# def is_exaustive_isomorphic(graph1, graph2):
-#     is_iso = True or len(graph1.nodes()) == len(graph2.nodes())
-#     # Check leaf equality
-#     leaves_g1 = [n for n in graph1.nodes()
-#                  if graph1.successors(n) == 0]
-#     leaves_g2 = [n for n in graph2.nodes()
-#                  if graph2.successors(n) == 0]
-#     is_iso = is_iso or len(leaves_g1) == len(leaves_g2)
-#     is_iso = is_iso or all([l1 in leaves_g2 for l1 in leaves_g1])
-#     # Check internal nodes equality
-#     comp_graph = graph2.copy()
-#     node_labels = [n for n in graph1.nodes()]
-#     old_labels = [n for n in comp_graph.nodes()]
-#     for new_labels in itertools.permutations(node_labels):
-        
+def permute(A, permutation):
+    assert A.shape[0] == len(permutation)
+    assert A.shape[1] == len(permutation)
+    return A[permutation, :][:, permutation]
+
+
+def is_exaustive_isomorphic(
+        A, B, matched_idx_A=None, matched_idx_B=None):
+
+    if matched_idx_A is None:
+        matched_idx_A = []
+    if matched_idx_B is None:
+        matched_idx_B = []
+
+    assert A.shape[0] == A.shape[1]
+    assert B.shape[0] == B.shape[1]
+    assert A.shape[0] == B.shape[0]
+
+    N = A.shape[0]
+
+    assert len(matched_idx_A) == len(matched_idx_B)
+    assert len(matched_idx_A) == len(set(matched_idx_A))
+    assert len(matched_idx_B) == len(set(matched_idx_B))
+    if len(matched_idx_A):
+        assert min(matched_idx_A + matched_idx_B) >= 0
+        assert max(matched_idx_A + matched_idx_B) < N
+
+    other_idx_A = [i for i in range(N) if i not in matched_idx_A]
+    other_idx_B = [i for i in range(N) if i not in matched_idx_B]
+
+    A = permute(A, other_idx_A + matched_idx_A)
+    B = permute(B, other_idx_B + matched_idx_B)
+
+    for p in itertools.permutations(range(len(other_idx_B))):
+        if np.all(
+            A == permute(
+                B, list(p) + list(range(len(other_idx_B), N)))):
+            return True
+
+    return False
 
 
 def is_decomp_bn_same(ori_bn, decomp_bn, elim_ord):
     triang_ori = triangulate(ori_bn.dag, elim_ord)
+    ori_nds_ord = triang_ori.nodes()
+    ori_leaf_idxs = [i for i, n in enumerate(ori_nds_ord)
+                     if ori_bn.dag.successors(n) == 0]
     undirected_decomp = decomp_bn.dag.to_undirected()
+    decomp_nds_ord = undirected_decomp.nodes()
+    decomp_leaf_idxs = [i for i, n in enumerate(decomp_nds_ord)
+                        if decomp_bn.dag.successors(n) == 0]
+    adj_ori = nx.convert_matrix.to_numpy_matrix(triang_ori)
+    adj_decomp = nx.convert_matrix.to_numpy_matrix(undirected_decomp)
 
-    return nx.is_isomorphic(triang_ori, undirected_decomp)
+    return is_exaustive_isomorphic(adj_ori, adj_decomp,
+                                   matched_idx_A=ori_leaf_idxs,
+                                   matched_idx_B=decomp_leaf_idxs)
+
+
+def printProgressBar(iteration, total, prefix='', suffix='',
+                     decimals=1, length=100, fill='█',
+                     printEnd="\r"):
+    """
+    https://stackoverflow.com/questions/3173320/
+    text-progress-bar-in-the-console
+    Call in a loop to create terminal progress bar
+    @params:
+        iteration   - Required  : current iteration (Int)
+        total       - Required  : total iterations (Int)
+        prefix      - Optional  : prefix string (Str)
+        suffix      - Optional  : suffix string (Str)
+        decimals    - Optional  : positive number of decimals
+                      in percent complete (Int)
+        length      - Optional  : character length of bar (Int)
+        fill        - Optional  : bar fill character (Str)
+        printEnd    - Optional  : end character (e.g. "\r", "\r\n") (Str)
+    """
+    percent = ("{0:." + str(decimals) + "f}").format(
+        100 * (iteration / float(total)))
+    filledLength = int(length * iteration // total)
+    bar = fill * filledLength + '-' * (length - filledLength)
+    print('\r%s |%s| %s%% %s' % (
+        prefix, bar, percent, suffix), end=printEnd)
+    # Print New Line on Complete
+    if iteration == total:
+        print()
+
+
+def run_bn_exp(bn, bn_idx):
+    bn_name = bn.dag.graph['name']
+
+    all_elim_ord = EliminationOrdering.get_elimination_ordering(
+        bn, elim_ord_type)
+    all_elim_ord = all_elim_ord if type(all_elim_ord[0]) is list\
+        else [all_elim_ord]
+    for i, elim_ord in enumerate(all_elim_ord):
+        plotter = SubplotDrawer("Compiling and Decompiling BN - " +
+                                bn_name)
+        plotter.add(bn, "BN" +
+                    "- #N:" + str(len(bn.dag.nodes())) +
+                    ",#E:" + str(len(bn.dag.edges()))
+                    )
+
+        # --- Compile and Decompile
+        # 1) Compilation
+        ac = compile_variable_elimination(bn, elim_ord)
+        plotter.add(ac, "Compiled AC - " + str(elim_ord))
+
+        # 2) Convert to SPN
+        spn = convert_ac2spn(ac, subplot_drawer=plotter)
+
+        # 3) Marginalized SPN
+        marg_nodes = []
+        if comp_marg_spn == "internal":
+            marg_nodes = [var for var in bn.dag.nodes()
+                          if len(list(bn.dag.successors(var))) > 0]
+        spn = compile_marginalized_spn(spn, marg_nodes,
+                                       collapse_sums=is_collapse_sums,
+                                       subplot_drawer=None)
+        comp_marg_subplot_title = "Compiled Marginalized SPN"
+        if is_collapse_sums:
+            comp_marg_subplot_title += " - Collpase Sum"
+        if comp_marg_spn == "none":
+            comp_marg_subplot_title += " - None Marg"
+        elif comp_marg_spn == "internal":
+            comp_marg_subplot_title += " - Marg Internal"
+        plotter.add(spn, comp_marg_subplot_title)
+
+        # 4) Decompilation
+        decomp_bn = decompile(spn, comp_assumption="ve")
+        plotter.add(decomp_bn, "Decompiled BN" +
+                    "- #N:" + str(len(decomp_bn.dag.nodes())) +
+                    ",#E:" + str(len(decomp_bn.dag.edges()))
+                    )
+
+        # --- Compare and print/plot
+        bns_same = is_decomp_bn_same(bn, decomp_bn, elim_ord)
+        if print_compare:
+            print("------ " + bn_name + " Report - Elim Ord: "
+                  + str(i + 1) + "/" + str(len(all_elim_ord)) + " ------")
+            print("-> Ori BN #nodes: " + str(len(bn.dag.nodes())) +
+                  ", #edges: " + str(len(bn.dag.edges())))
+            print("-> Decomp BN #nodes: " + str(len(decomp_bn.dag.nodes()))
+                  + ", #edges: " + str(len(decomp_bn.dag.edges())))
+            print(">>> Decompilation same as original: " + str(bns_same))
+        printProgressBar(bn_idx + 1, total_bns,
+                         prefix='Progress:',
+                         suffix='Complete', length=50)
+        if not bns_same:
+            diff_decomp.append(bn_name)
+        if (plot_diff and not bns_same) or plot_all:
+            plotter.plot()
 
 
 if __name__ == "__main__":
@@ -97,7 +236,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description="Experiment for recoverying BN")
     parser.add_argument(
-        "--bn", type=str, help="Path to '.bn' file or folder name.",
+        "--bn", type=str, help="Path to '.bn' file or folder name.\
+            For generated BNs, use 'all-bns'.",
         required=True)
     parser.add_argument(
         "--elim-ord", type=str, help="Elimination ordering type.",
@@ -106,6 +246,10 @@ if __name__ == "__main__":
         "--plot-all",
         help="Plot all graphs.",
         action="store_true")
+    parser.add_argument(
+        "--all-bns-nvars",
+        help="Number of variables for all BN generation.",
+        type=int)
     args = parser.parse_args()
 
     # Parameters
@@ -115,82 +259,37 @@ if __name__ == "__main__":
     comp_marg_spn = "internal"
     plot_diff = True
     plot_all = args.plot_all
+    print_compare = False
 
-    bn_files = []
-    is_file = bn_path.endswith(".bn")
-    if is_file:
-        bn_files = [bn_path]
+    bns = []
+    if bn_path == "all-bns":
+        bns = generate_all_bns(args.all_bns_nvars)
     else:
-        bn_files = [os.path.join("bns", name)
-                    for name in os.listdir(bn_path)]
+        bn_files = []
+        is_file = bn_path.endswith(".bn")
+        if is_file:
+            bn_files = [bn_path]
+        else:
+            bn_files = [os.path.join("bns", name)
+                        for name in os.listdir(bn_path)]
+        bns = [
+            BayesianNetwork.get_bn_from_file(bn_file_name)
+            for bn_file_name in bn_files
+        ]
 
     diff_decomp = []
-    for bn_file_name in bn_files:
-        # plotting
-        bn_name = bn_file_name.replace(".bn", "")
+    total_bns = len(bns)
+    start_time = time.time()
 
-        bn = BayesianNetwork.get_bn_from_file(bn_file_name)
+    Parallel(n_jobs=10)(delayed(run_bn_exp)(bn, bn_idx)
+                        for bn_idx, bn in enumerate(bns))
+    # for bn_idx, bn in enumerate(bns):
+    #     run_bn_exp(bn, bn_idx)
 
-        all_elim_ord = EliminationOrdering.get_elimination_ordering(
-            bn, elim_ord_type)
-        all_elim_ord = all_elim_ord if type(all_elim_ord[0]) is list\
-            else [all_elim_ord]
-        for i, elim_ord in enumerate(all_elim_ord):
-            plotter = SubplotDrawer("Compiling and Decompiling BN - " +
-                                    bn_file_name)
-            plotter.add(bn, "BN" +
-                        "- #N:" + str(len(bn.dag.nodes())) +
-                        ",#E:" + str(len(bn.dag.edges()))
-                        )
-
-            # --- Compile and Decompile
-            # 1) Compilation
-            ac = compile_variable_elimination(bn, elim_ord)
-            plotter.add(ac, "Compiled AC - " + str(elim_ord))
-
-            # 2) Convert to SPN
-            spn = convert_ac2spn(ac, subplot_drawer=plotter)
-
-            # 3) Marginalized SPN
-            marg_nodes = []
-            if comp_marg_spn == "internal":
-                marg_nodes = [var for var in bn.dag.nodes()
-                              if len(list(bn.dag.successors(var))) > 0]
-            spn = compile_marginalized_spn(spn, marg_nodes,
-                                           collapse_sums=is_collapse_sums,
-                                           subplot_drawer=None)
-            comp_marg_subplot_title = "Compiled Marginalized SPN"
-            if is_collapse_sums:
-                comp_marg_subplot_title += " - Collpase Sum"
-            if comp_marg_spn == "none":
-                comp_marg_subplot_title += " - None Marg"
-            elif comp_marg_spn == "internal":
-                comp_marg_subplot_title += " - Marg Internal"
-            plotter.add(spn, comp_marg_subplot_title)
-
-            # 4) Decompilation
-            decomp_bn = decompile(spn, comp_assumption="ve")
-            plotter.add(decomp_bn, "Decompiled BN" +
-                        "- #N:" + str(len(decomp_bn.dag.nodes())) +
-                        ",#E:" + str(len(decomp_bn.dag.edges()))
-                        )
-
-            # --- Compare
-            print("------ " + bn_name + " Report - Elim Ord: "
-                  + str(i + 1) + "/" + str(len(all_elim_ord)) + " ------")
-            print("-> Ori BN #nodes: " + str(len(bn.dag.nodes())) +
-                  ", #edges: " + str(len(bn.dag.edges())))
-            print("-> Decomp BN #nodes: " + str(len(decomp_bn.dag.nodes()))
-                  + ", #edges: " + str(len(decomp_bn.dag.edges())))
-            bns_same = is_decomp_bn_same(bn, decomp_bn, elim_ord)
-            if not bns_same:
-                diff_decomp.append(bn_name)
-            if (plot_diff and not bns_same) or plot_all:
-                plotter.plot()
-
+    end_time = time.time()
     print("******************")
     print("***** Report *****")
     print("******************")
-    print("-> Different decompilations: " + str(len(diff_decomp))
-          + "/" + str(len(bn_files)))
+    print("-> Different decompilations: " + str(len(diff_decomp)))
     print("-> Diff decomp BNs:" + str(diff_decomp))
+    print("Execution: " + str(end_time - start_time))

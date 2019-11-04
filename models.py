@@ -73,7 +73,7 @@ class BayesianNetwork(ProbabilisticGraphicalModel):
     @staticmethod
     def get_bn_from_file(bn_file_name):
         # Construct the DAG
-        bn_dag = nx.DiGraph()
+        bn_dag = nx.DiGraph(name=bn_file_name.replace(".bn", ""))
         var_cardinalities = {}
         with open(bn_file_name) as bn_file:
             vars_line = bn_file.readline().replace("\n", "")
