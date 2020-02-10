@@ -119,6 +119,30 @@ def is_exaustive_isomorphic(
     return False
 
 
+def directed_moralize(dag, elim_ord):
+    for preds in dag.pred.values():
+        for pred_comb in itertools.combinations(preds, r=2):
+            right_dir = pred_comb \
+                if elim_ord.index(pred_comb[0]) > elim_ord.index(pred_comb[1])\
+                else (pred_comb[1], pred_comb[0])
+            dag.add_edge(right_dir[0], right_dir[1])
+
+
+def higher_order_moralization(dag, elim_ord):
+    while True:
+        mor_dag = dag.copy()
+        directed_moralize(mor_dag, elim_ord)
+        # OBS: the order of the difference matters: mor_dag - dag is different
+        # from dag - mor_dag
+        diff_graph = nx.algorithms.operators.binary.difference(mor_dag, dag)
+        if len(list(diff_graph.edges())) == 0:
+            break
+        else:
+            dag = mor_dag
+
+    return dag
+
+
 def is_decomp_bn_same(ori_bn, decomp_bn, elim_ord):
     triang_ori = triangulate(ori_bn.dag, elim_ord)
     ori_nds_ord = triang_ori.nodes()
@@ -165,7 +189,7 @@ def printProgressBar(iteration, total, prefix='', suffix='',
         print()
 
 
-def run_bn_exp(bn, bn_idx):
+def run_bn_exp(bn, bn_idx, elim_ord_type):
     bn_name = bn.dag.graph['name']
 
     all_elim_ord = EliminationOrdering.get_elimination_ordering(
@@ -260,6 +284,7 @@ if __name__ == "__main__":
     plot_diff = True
     plot_all = args.plot_all
     print_compare = False
+    run_parallel = False
 
     bns = []
     if bn_path == "all-bns":
@@ -281,10 +306,12 @@ if __name__ == "__main__":
     total_bns = len(bns)
     start_time = time.time()
 
-    Parallel(n_jobs=10)(delayed(run_bn_exp)(bn, bn_idx)
-                        for bn_idx, bn in enumerate(bns))
-    # for bn_idx, bn in enumerate(bns):
-    #     run_bn_exp(bn, bn_idx)
+    if run_parallel:
+        Parallel(n_jobs=10)(delayed(run_bn_exp)(bn, bn_idx, elim_ord_type)
+                            for bn_idx, bn in enumerate(bns))
+    else:
+        for bn_idx, bn in enumerate(bns):
+            run_bn_exp(bn, bn_idx, elim_ord_type)
 
     end_time = time.time()
     print("******************")
